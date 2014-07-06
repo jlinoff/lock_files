@@ -154,7 +154,7 @@ def crypt(opts, password, files):
         ext = '.enc' if encrypt else '.dec'
 
     for path in files:
-        ifp = open(path, 'r')
+        ifp = open(path, 'rb')
         data = ifp.read()
         ifp.close()
 
@@ -166,7 +166,7 @@ def crypt(opts, password, files):
             else:
                 modified = aes.decrypt(data)
 
-            ofp = open(opath, 'w')
+            ofp = open(opath, 'wb')
             ofp.write(modified)
             ofp.close()
 
