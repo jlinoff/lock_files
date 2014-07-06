@@ -1,7 +1,7 @@
 lock_files
 ==========
 
-Python command line to encrypt or decrypt files using AES encryption and a common password.
+Python command line tool to encrypt or decrypt files using AES encryption and a common password.
 
 You can use it lock files before they are uploaded to storage services like DropBox or Google Drive.
 
