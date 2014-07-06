@@ -233,6 +233,8 @@ def get_password(opts):
 
     # User specified the password in a file. It should be 0600.
     if opts.password_file:
+        if os.path.exists(opts.password_file):
+            err("password file doesn't exist: %s" % (opts.password_file))
         password = None
         ifp = open(opts.password_file, 'r')
         for line in ifp.readlines():
