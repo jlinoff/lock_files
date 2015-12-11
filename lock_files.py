@@ -46,7 +46,6 @@ guaranteeing that you do not overwrite the original files.
 Finally, if you specify -v -v (very verbose), you will see the
 operations on each file.'''
 import argparse
-import crypto
 import inspect
 import getpass
 import os
