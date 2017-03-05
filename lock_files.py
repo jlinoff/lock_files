@@ -46,9 +46,9 @@ Here is how you would use this tool to decrypt a file, execute a
 program and then re-encrypt it when the program exits.
 
    $ # the unlock operation removes the .locked extension
-   $ lock_files -P ./password --unlock file1.txt.locked
+   $ lock_files -p ./password --unlock file1.txt.locked
    $ edit file1.txt
-   $ lock_files -P ./password file1.txt
+   $ lock_files -p ./password file1.txt
 
 The tool checks each file to make sure that it is writeable before
 processing. If any files is not writeable, the program reports an
@@ -451,7 +451,7 @@ def getopts():
     argparse._ = gettext  # to capitalize help headers
     base = os.path.basename(sys.argv[0])
     name = os.path.splitext(base)[0]
-    usage = '\n  {0} [OPTIONS] <DOT_FILE>'.format(base)
+    usage = '\n  {0} [OPTIONS] [<FILES_OR_DIRS>]+'.format(base)
     desc = 'DESCRIPTION:{0}'.format('\n  '.join(__doc__.split('\n')))
     epilog = r'''EXAMPLES:
    # Example 1: help
@@ -483,12 +483,18 @@ def getopts():
    #            previous releases.
    #            This mode of operation is not recommended because
    #            data will be lost if the disk fills up during a write.
-   $ {0} -P 'secret' --i -l file.txt
+   $ {0} -P 'secret' -i -l file.txt
    $ ls file.txt*
    file.txt
    $ {0} -P 'secret' -i -u file.txt
    $ ls file.txt*
    file.txt
+
+   # Example 6: use a password file.
+   $ echo 'secret' >pass.txt
+   $ chmod 0600 pass.txt
+   $ {0} -p pass.txt -l file.txt
+   $ {0} -p pass.txt -u file.txt.locked
 
 COPYRIGHT:
    Copyright (c) 2015 Joe Linoff, all rights reserved
@@ -597,6 +603,8 @@ If the --suffix option is specified, that extension is used instead of ".locked"
                         action='count',
                         default=0,
                         help='''Increase the level of verbosity.
+A single -v generates a summary report.
+Two or more -v options show all of the files being processed.
  ''')
 
     # Display the version number and exit.
