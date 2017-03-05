@@ -644,6 +644,33 @@ fi
 wc test1.txt
 sum test1.txt
 
+# Test different lengths to verify padding.
+for(( i=1;i<=32;i++ )) ; do
+    str=""
+    for(( j=1; j<=i; j++ )) ; do
+        (( k = j % 10 ))
+        str+="$k"
+    done
+    echo "$str" >test1.txt
+    tid=${LINENO}
+    $Prog -P secret -v -v --lock -i test1.txt
+    st=$?
+    if (( $st == 0 )) ; then
+        Pass $tid "lock-run-$i"
+    else
+        Fail $tid "lock-run-$i"
+    fi
+
+    tid=${LINENO}
+    $Prog -P secret -v -v --unlock -i test1.txt
+    st=$?
+    if (( $st == 0 )) ; then
+        Pass $tid "unlock-run-$i"
+    else
+        Fail $tid "unlock-run-$i"
+    fi
+done
+
 rm -f test*.txt*
 
 Done
