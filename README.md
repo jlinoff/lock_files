@@ -1,7 +1,8 @@
 lock_files
 ==========
 
-This is version 2.x of the python command line tool to encrypt or decrypt files using AES encryption and a common password. This version works in python2 and python3.
+This is first official release of lock_files.py, a python command line tool to encrypt or decrypt files using AES
+encryption and a common password. This version works in python2 and python3.
 
 ## Overview
 You can use it lock files before they are uploaded to storage services like DropBox or Google Drive.
