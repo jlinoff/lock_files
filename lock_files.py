@@ -79,7 +79,7 @@ except ImportError:
     import queue   # python3
 
 
-VERSION = '1.0'
+VERSION = '1.0.1'
 
 
 # CITATION: http://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
@@ -87,28 +87,10 @@ class AESCipher:
     '''
     Class that provides an object to encrypt or decrypt a string.
     '''
-    def __init__(self, key):
-        self.m_bs = 32
-
-        # Pad contains the character which is also the number of
-        # padded characters. This is how we unpad to work properly.
-        self.m_pad = []
-        if sys.version_info[0] == 3:
-            # Python3 - pad with bytes
-            for i in range(self.m_bs + 1):  # include 32
-                b = bytes([i]).decode('utf-8') * i
-                self.m_pad.append(str(b))
-            b = bytes([self.m_bs]).decode('utf-8') * self.m_bs
-            self.m_pad[0] = b * self.m_bs # special case
-        elif sys.version_info[0] == 2:
-            # Python - pad with chars
-            for i in range(self.m_bs + 1):  # include 32
-                b = chr(i) * i
-                self.m_pad.append(b)
-            self.m_pad[0] = chr(self.m_bs) * self.m_bs # special case
-
-        if len(key) >= self.m_bs:
-            self.m_key = key[:self.m_bs]
+    def __init__(self, key, block_size=32):
+        self.m_block_size = block_size
+        if len(key) >= self.m_block_size:
+            self.m_key = key[:self.m_block_size]
         else:
             self.m_key = self._pad(key)
 
@@ -125,16 +107,16 @@ class AESCipher:
         return self._unpad(cipher.decrypt(enc[AES.block_size:]))
 
     def _pad(self, s):
-        # pad to the boundary.
-        b = len(s) % self.m_bs
-        p = self.m_bs - b
+        # pad to the boundary using a byte value that indicates
+        # the number of padded bytes to make it easy to unpad
+        # later.
+        num_bytes = self.m_block_size - (len(s) % self.m_block_size)
 
         # Works for python3 and python2.
         if isinstance(s, str):
-            s += self.m_pad[p]
+            s += chr(num_bytes) * num_bytes
         elif isinstance(s, bytes):
-            ps = self.m_pad[p]
-            s += bytes(ps, 'utf-8')
+            s += bytearray([num_bytes] * num_bytes)
         else:
             assert False
         return s
