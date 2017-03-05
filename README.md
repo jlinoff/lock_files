@@ -10,6 +10,23 @@ You can use it lock files before they are uploaded to storage services like Drop
 
 The password can be stored in a safe file, specified on the command line or it can be manually entered each time the tool is run.
 
+Lets start with the simplest case, locking and unlocking a simple file using the password `secret`. The file is `file.txt`.
+
+```bash
+$ ls file.txt*
+file.txt
+$ lock_files.py -P secret --lock file.txt
+$ ls file.txt*
+file.txt.locked
+$ lock_files.py -P secret --unlock file.txt.locked
+$ ls file.txt*
+file.txt
+```
+
+From this example you can see that the input file is encrypted/locked and is stored in `file.txt.locked`. It is then decrypted/unlocked
+back to the original file `file.txt`. This is the normal mode of operation. There is another mode called _in place_ that is
+explained and demonstrated in the next example.
+
 Here is how you would use this tool to encrypt a number of files _in place_ using a local, secure file. The term _in place_ means
 not appending the `.locked` suffix to each file name that was locked (e.g. encrypted). _In place_ is not secure because data
 will be lost if the disk fills up during a write operation and it is not able to complete.
@@ -20,7 +37,7 @@ will be lost if the disk fills up during a write operation and it is not able to
     $ chmod 0600 password-file
     $ lock_files.py -p ./password-file -i -l file1.txt file2.txt dir1 dir2
 
-Here is how you would use this tool to unloock (e.g. decrypt) a number of _in place_ locked files.
+Here is how you would use this tool to unlock (e.g. decrypt) a number of _in place_ locked files.
 Note that at this point `file1.txt` is actually encrypted.
 
     $ lock_files.py -p ./password-file -i -u file1.txt file2.txt dir1 dir2
