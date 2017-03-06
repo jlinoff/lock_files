@@ -181,6 +181,14 @@ OPTIONAL ARGUMENTS:
                         lost when a write fails. This allows you to duplicate the behavior of
                         the previous version.
                          
+  -j NUM_THREADS, --jobs NUM_THREADS
+                        Specify the maximum number of active threads.
+                        
+                        This can be helpful if there a lot of large files to process where
+                        large refers to files larger than a MB.
+                        
+                        Default: 8
+
   -l, --lock            Lock files.
                         Files are locked and the ".locked" extension is appended unless
                         the --suffix option is specified.
