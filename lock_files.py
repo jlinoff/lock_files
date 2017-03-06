@@ -63,7 +63,11 @@ import base64
 import getpass
 import inspect
 import os
+import subprocess
 import sys
+import threading
+
+from threading import Thread, Lock, Semaphore
 
 # You may get into trouble with versions of python earlier than 2.7.
 try:
@@ -139,21 +143,11 @@ class AESCipher:
 # Message Utility Functions.
 #
 # ================================================================
-def _msg(msg, prefix, level=2, ofp=sys.stdout):
-    '''
-    Display a simple information message with context information.
-    '''
-    frame = inspect.stack()[level]
-    #fname = os.path.basename(frame[1])
-    lineno = frame[2]
-    ofp.write('{}:{} {}\n'.format(prefix, lineno, msg))
-
-
 def info(msg, level=1, ofp=sys.stdout):
     '''
     Display a simple information message with context information.
     '''
-    _msg(prefix='INFO', msg=msg, level=level+1, ofp=ofp)
+    ofp.write('INFO:{} {}\n'.format(inspect.stack()[level][2], msg))
 
 
 def infov(opts, msg, level=1, ofp=sys.stdout):
@@ -161,7 +155,7 @@ def infov(opts, msg, level=1, ofp=sys.stdout):
     Display a simple information message with context information.
     '''
     if opts.verbose:
-        _msg(prefix='INFO', msg=msg, level=level+1, ofp=ofp)
+        ofp.write('INFO:{} {}\n'.format(inspect.stack()[level][2], msg))
 
 
 def infov2(opts, msg, level=1, ofp=sys.stdout):
@@ -169,29 +163,102 @@ def infov2(opts, msg, level=1, ofp=sys.stdout):
     Display a simple information message with context information.
     '''
     if opts.verbose > 1:
-        _msg(prefix='INFO', msg=msg, level=level+1, ofp=ofp)
+        ofp.write('INFO:{} {}\n'.format(inspect.stack()[level][2], msg))
+
+
+def infov2m(opts, mutex, msg, level=1, ofp=sys.stdout):
+    '''
+    Display a simple information message with context information.
+    '''
+    if opts.verbose > 1:
+        mutex.acquire()
+        try:
+            ofp.write('INFO:{} {}\n'.format(inspect.stack()[level][2], msg))
+        finally:
+            mutex.release()
 
 
 def err(msg, level=1, ofp=sys.stdout):
     '''
     Display error message with context information and exit.
     '''
-    _msg(prefix='ERROR', msg=msg, level=level+1, ofp=ofp)
+    ofp.write('ERROR:{} {}\n'.format(inspect.stack()[level][2], msg))
     sys.exit(1)
+
+
+def errm(mutex, msg, level=1, ofp=sys.stdout):
+    '''
+    Display error message with context information and exit.
+    '''
+    mutex.acquire()
+    try:
+        ofp.write('ERROR:{} {}\n'.format(inspect.stack()[level][2], msg))
+    finally:
+        mutex.release()
+    # Can't use sys.exit() here because that will only halt the thread.
+    os._exit(1)
 
 
 def errn(msg, level=1, ofp=sys.stdout):
     '''
     Display error message with context information but do not exit.
     '''
-    _msg(prefix='ERROR', msg=msg, level=level+1, ofp=ofp)
+    ofp.write('ERROR:{} {}\n'.format(inspect.stack()[level][2], msg))
 
 
 def warn(msg, level=1, ofp=sys.stdout):
     '''
     Display error message with context information but do not exit.
     '''
-    _msg(prefix='WARNING', msg=msg, level=level+1, ofp=ofp)
+    ofp.write('WARNING:{} {}\n'.format(inspect.stack()[level][2], msg))
+
+
+def warnm(mutex, msg, level=1, ofp=sys.stdout):
+    '''
+    Display error message with context information but do not exit.
+    '''
+    mutex.acquire()
+    try:
+        ofp.write('WARNING:{} {}\n'.format(inspect.stack()[level][2], msg))
+    finally:
+        mutex.release()
+
+
+# ================================================================
+#
+# Thread utility functions.
+#
+# ================================================================
+def get_num_cores():
+    '''
+    Get the number of available cores.
+    Unforunately, multiprocessing.cpu_count() uses _NPROCESSORS_ONLN
+    which may be different than the actual number of cores available
+    if power saving mode is enabled.
+
+    On Linux and Mac we can use "getconf _NPROCESSORS_CONF", I have
+    no idea how to get it on windows, maybe some WMIC call.
+    '''
+    if os.name == 'posix':
+        # should be able to run getconf.
+        try:
+            out = subprocess.check_output('getconf _NPROCESSORS_CONF', stderr=subprocess.STDOUT, shell=True)
+            return int(out.strip())
+        except subprocess.CallProcessError as exc:
+            err('command failed: {}'.format(exc))
+
+    return multiprocessing.cpu_count()
+
+
+def thread_process_file(opts, mutex, sem, password, entry, stats):
+    '''
+    Thread worker.
+
+    Waits for the semaphore to make a slot available, then
+    runs the specified function.
+    '''
+    with sem:
+        process_file(opts, mutex, password, entry, stats)
 
 
 # ================================================================
@@ -205,68 +272,80 @@ def get_cont_fct(opts):
     the --cont setting.
     '''
     if opts.cont is True:
-        return warn
-    return err
+        return warnm
+    return errm
 
 
-def check_existence(opts, path):
+def stat_inc(mutex, stats, key, value=1):
+    '''
+    Increment the stat in a synchronous way using a mutex
+    to coordinate between threads.
+    '''
+    mutex.acquire()
+    try:
+        stats[key] += value
+    finally:  # avoid deadlock from exception
+        mutex.release()
+
+
+def check_existence(opts, mutex, path):
     '''
     Check to see if a file exists.
     If -o or --overwrite is specified, we don't care if it exists.
     '''
     if opts.overwrite is False and os.path.exists(path):
-        get_cont_fct(opts)('file exists, cannot continue: {}'.format(path))
+        get_cont_fct(opts)(mutex, 'file exists, cannot continue: {}'.format(path))
 
 
-def read_file(opts, path, stats):
+def read_file(opts, mutex, path, stats):
     '''
     Read the file contents.
     '''
     try:
         with open(path, 'rb') as ifp:
             data = ifp.read()
-            stats['read'] += len(data)
+            stat_inc(mutex, stats, 'read', len(data))
             return data
     except IOError as exc:
-        get_cont_fct(opts)('failed to read file "{}": {}'.format(path, exc))
+        get_cont_fct(opts)(mutex, 'failed to read file "{}": {}'.format(path, exc))
         return None
 
 
-def write_file(opts, path, content, stats):
+def write_file(opts, mutex, path, content, stats):
     '''
     Write the file.
     '''
     try:
         with open(path, 'wb') as ofp:
             ofp.write(content)
-            stats['written'] += len(content)
+            stat_inc(mutex, stats, 'written', len(content))
     except IOError as exc:
-        get_cont_fct(opts)('failed to write file "{}": {}'.format(path, exc))
+        get_cont_fct(opts)(mutex, 'failed to write file "{}": {}'.format(path, exc))
         return False
     return True
 
 
-def lock_file(opts, password, path, stats):
+def lock_file(opts, mutex, password, path, stats):
     '''
     Lock a file.
     '''
     out = path + opts.suffix
-    infov2(opts, 'lock "{}" --> "{}"'.format(path, out))
-    check_existence(opts, out)
-    content = read_file(opts, path, stats)
+    infov2m(opts, mutex, 'lock "{}" --> "{}"'.format(path, out))
+    check_existence(opts, mutex, out)
+    content = read_file(opts, mutex, path, stats)
     if content is not None:
         try:
             aes = AESCipher(password)
             data = aes.encrypt(content)
-            if write_file(opts, out, data, stats) is True:
+            if write_file(opts, mutex, out, data, stats) is True:
                 if out != path:
                     os.remove(path)  # remove the input
-                stats['locked'] += 1
+                stat_inc(mutex, stats, 'locked')
         except ValueError as exc:
-            get_cont_fct(opts)('lock/encrypt operation failed for "{}": {}'.format(path, exc))
+            get_cont_fct(opts)(mutex, 'lock/encrypt operation failed for "{}": {}'.format(path, exc))
 
 
-def unlock_file(opts, password, path, stats):
+def unlock_file(opts, mutex, password, path, stats):
     '''
     Unlock a file.
     '''
@@ -275,36 +354,36 @@ def unlock_file(opts, password, path, stats):
             out = path[:-len(opts.suffix)]
         else:
             out = path
-        infov2(opts, 'unlock "{}" --> "{}"'.format(path, out))
-        check_existence(opts, out)
-        content = read_file(opts, path, stats)
+        infov2m(opts, mutex, 'unlock "{}" --> "{}"'.format(path, out))
+        check_existence(opts, mutex, out)
+        content = read_file(opts, mutex, path, stats)
         if content is not None:
             try:
                 aes = AESCipher(password)
                 data = aes.decrypt(content)
-                if write_file(opts, out, data, stats) is True:
+                if write_file(opts, mutex, out, data, stats) is True:
                     if out != path:
                         os.remove(path)  # remove the input
                     stats['unlocked'] += 1
             except ValueError as exc:
-                get_cont_fct(opts)('unlock/decrypt operation failed for "{}": {}'.format(path, exc))
+                get_cont_fct(opts)(mutex, 'unlock/decrypt operation failed for "{}": {}'.format(path, exc))
     else:
-        infov2(opts, 'skip "{}"'.format(path))
+        infov2m(opts, mutex, 'skip "{}"'.format(path))
         stats['skipped'] += 1
 
 
-def process_file(opts, password, path, stats):
+def process_file(opts, mutex, password, path, stats):
     '''
     Process a file.
     '''
     stats['files'] += 1
     if opts.lock is True:
-        lock_file(opts, password, path, stats)
+        lock_file(opts, mutex, password, path, stats)
     else:
-        unlock_file(opts, password, path, stats)
+        unlock_file(opts, mutex, password, path, stats)
 
 
-def process_dir(opts, password, path, stats):
+def process_dir(opts, mutex, sem, password, path, stats):
     '''
     Process a directory, we always start at the top level.
     '''
@@ -316,7 +395,9 @@ def process_dir(opts, password, path, stats):
                 if subfile.startswith('.'):
                     continue
                 subpath = os.path.join(root, subfile)
-                process_file(opts, password, subpath, stats)
+                th = Thread(target=thread_process_file, args=(opts, mutex, sem, password, subpath, stats))
+                th.daemon = True
+                th.start()
     else:
         # Use listdir() to get the files in the current directory only.
         for entry in sorted(os.listdir(path), key=str.lower):
@@ -324,10 +405,12 @@ def process_dir(opts, password, path, stats):
                 continue
             subpath = os.path.join(path, entry)
             if os.path.isfile(subpath):
-                process_file(opts, password, subpath, stats)
+                th = Thread(target=thread_process_file, args=(opts, mutex, sem, password, subpath, stats))
+                th.daemon = True
+                th.start()
 
 
-def process(opts, password, entry, stats):
+def process(opts, mutex, sem, password, entry, stats):
     '''
     Process an entry.
 
@@ -336,39 +419,47 @@ def process(opts, password, entry, stats):
     If it is a directory, recurse unless --no-recurse was specified.
     '''
     if os.path.isfile(entry):
-        process_file(opts, password, entry, stats)
+        th = Thread(target=thread_process_file, args=(opts, mutex, sem, password, entry, stats))
+        th.daemon = True
+        th.start()
     elif os.path.isdir(entry):
-        process_dir(opts, password, entry, stats)
+        process_dir(opts, mutex, sem, password, entry, stats)
 
 
-def run(opts, password):
+def run(opts, mutex, sem, password, stats):
     '''
     Process the entries on the command line.
     They can be either files or directories.
     '''
-    stats = {
-        'locked': 0,
-        'unlocked': 0,
-        'skipped': 0,
-        'files': 0,
-        'dirs': 0,
-        'read': 0,
-        'written': 0,
-        }
-
     for entry in opts.FILES:
-        process(opts, password, entry, stats)
+        process(opts, mutex, sem, password, entry, stats)
 
-    # Print the summary statistics.
+
+def summary(opts, stats):
+    '''
+    Print the summary statistics after all threads
+    have completed.
+    '''
     if opts.verbose:
-        print('total files:         {:>10,}'.format(stats['files']))
+        action = 'lock' if opts.lock is True else 'unlock'
+        print('')
+        print('Setup')
+        print('   action:              {:>12}'.format(action))
+        print('   inplace:             {:>12}'.format(str(opts.inplace)))
+        print('   jobs:                {:>12,}'.format(opts.jobs))
+        print('   overwrite:           {:>12}'.format(str(opts.overwrite)))
+        print('   suffix:              {:>12}'.format('"' + opts.suffix + '"'))
+        print('')
+        print('Summary')
+        print('   total files:         {:>12,}'.format(stats['files']))
         if opts.lock:
-            print('total locked:        {:>10,}'.format(stats['locked']))
+            print('   total locked:        {:>12,}'.format(stats['locked']))
         if opts.unlock:
-            print('total unlocked:      {:>10,}'.format(stats['unlocked']))
-        print('total skipped:       {:>10,}'.format(stats['skipped']))
-        print('total bytes read:    {:>10,}'.format(stats['read']))
-        print('total bytes written: {:>10,}'.format(stats['written']))
+            print('   total unlocked:      {:>12,}'.format(stats['unlocked']))
+        print('   total skipped:       {:>12,}'.format(stats['skipped']))
+        print('   total bytes read:    {:>12,}'.format(stats['read']))
+        print('   total bytes written: {:>12,}'.format(stats['written']))
+        print('')
 
 
 def get_password(opts):
@@ -532,6 +623,16 @@ lost when a write fails. This allows you to duplicate the behavior of
 the previous version.
  ''')
 
+    nc = get_num_cores()
+    parser.add_argument('-j', '--jobs',
+                        action='store',
+                        type=int,
+                        default=nc,
+                        metavar=('NUM_THREADS'),
+                        help='''Specify the maximum number of active threads.
+Default: %(default)s
+ ''')
+
     parser.add_argument('-l', '--lock',
                         action='store_true',
                         help='''Lock files.
@@ -624,7 +725,30 @@ def main():
     '''
     opts = getopts()
     password = get_password(opts)
-    run(opts, password)
+
+    stats = {
+        'locked': 0,
+        'unlocked': 0,
+        'skipped': 0,
+        'files': 0,
+        'dirs': 0,
+        'read': 0,
+        'written': 0,
+        }
+
+    # Use the mutex for I/O to avoid interspersed output.
+    # Use the semaphore to limit the number of active threads.
+    mutex = Lock()
+    sem = Semaphore(opts.jobs)
+    run(opts, mutex, sem, password, stats)
+
+    # Wait for the threads to finish.
+    for th in threading.enumerate():
+        if th == threading.currentThread():
+            continue
+        th.join()
+
+    summary(opts, stats)
 
 
 if __name__ == '__main__':

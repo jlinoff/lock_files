@@ -645,7 +645,7 @@ wc test1.txt
 sum test1.txt
 
 # Test different lengths to verify padding.
-for(( i=1;i<=32;i++ )) ; do
+for(( i=1; i<=32; i++ )) ; do
     str=""
     for(( j=1; j<=i; j++ )) ; do
         (( k = j % 10 ))
@@ -671,6 +671,117 @@ for(( i=1;i<=32;i++ )) ; do
     fi
 done
 
-rm -f test*.txt*
+# Test different processing of 100 files to verify threading.
+info 'setup for jobs test'
+rm -rf tmp
+mkdir tmp
+for(( i=1; i<=200; i++ )) ; do
+    fn=$(echo "$i" | awk '{printf("tmp/test%03d.txt", $1)}')
+    cp file1.txt "$fn"
+done
+info 'setup done'
+
+tid=${LINENO}
+if [ -e "tmp/test001.txt" ] ; then
+    Pass $tid "job-test001-check"
+else
+    Fail $tid "job-test001-check"
+fi
+
+tid=${LINENO}
+if [ -e "tmp/test200.txt" ] ; then
+    Pass $tid "job-test200-check"
+else
+    Fail $tid "job-test200-check"
+fi
+
+tid=${LINENO}
+$Prog -P secret -v -v --lock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-lock"
+else
+    Fail $tid "job-lock"
+fi
+
+tid=${LINENO}
+$Prog -P secret -v -v --unlock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-unlock"
+else
+    Fail $tid "job-unlock"
+fi
+
+# performance analysis (10 threads)
+# Use big files.
+info 'setup for jobs performance analysis'
+rm -rf tmp
+mkdir tmp
+for(( i=1; i<=200; i++ )) ; do
+    fn=$(echo "$i" | awk '{printf("tmp/test%03d.txt", $1)}')
+    if (( i == 1 )) ; then
+        # Create a big file for the first one.
+        for(( j=1; j<=2000; j++)) ; do
+            cat file1.txt >> "$fn"
+        done
+    else
+        cp tmp/test001.txt $fn
+    fi
+done
+info 'setup done'
+
+tid=${LINENO}
+if [ -e "tmp/test001.txt" ] ; then
+    Pass $tid "job-test001-check"
+else
+    Fail $tid "job-test001-check"
+fi
+
+tid=${LINENO}
+if [ -e "tmp/test100.txt" ] ; then
+    Pass $tid "job-test100-check"
+else
+    Fail $tid "job-test100-check"
+fi
+
+tid=${LINENO}
+time $Prog -P secret -v -j 10 --lock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-th10-lock"
+else
+    Fail $tid "job-th10-lock"
+fi
+
+tid=${LINENO}
+time $Prog -P secret -v -j 10 --unlock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-th10-unlock"
+else
+    Fail $tid "job-th10-unlock"
+fi
+
+# performance analysis (1 thread)
+tid=${LINENO}
+time $Prog -P secret -v -j 1 --lock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-th1-lock"
+else
+    Fail $tid "job-th1-lock"
+fi
+
+tid=${LINENO}
+time $Prog -P secret -v -j 1 --unlock tmp
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "job-th1-unlock"
+else
+    Fail $tid "job-th1-unlock"
+fi
+
+rm -rf test*.txt* tmp *~
 
 Done
