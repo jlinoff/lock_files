@@ -52,16 +52,6 @@ program and then re-encrypt it when the program exits.
 The tool checks each file to make sure that it is writeable before processing. If any files are not writeable,
 it means that they cannot be changed so the program aborts unless you specified the continue `-c` option.
 
-Normal operation writes the encrypted to a locked file like this.
-You can override this using the -u or --unique option as follows:
-
-    $ lock_files.py -p ./password-file -l file1.txt
-    $ ls file1.txt*
-    file1.txt.locked
-    $ lock_files.py  -p ./password-file -u file1.txt
-    $ ls file1.txt*
-    file1.txt
-
 If you specify -v -v (very verbose), you will see the operations on each file.
 
 ## Download and Test
