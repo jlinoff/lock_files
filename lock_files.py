@@ -630,6 +630,10 @@ the previous version.
                         default=nc,
                         metavar=('NUM_THREADS'),
                         help='''Specify the maximum number of active threads.
+
+This can be helpful if there a lot of large files to process where
+large refers to files larger than a MB.
+
 Default: %(default)s
  ''')
 
@@ -716,6 +720,8 @@ Two or more -v options show all of the files being processed.
     if opts.inplace:
         opts.suffix = ''
         opts.overwrite = True
+    elif opts.overwrite == True and opts.suffix == '':
+        opts.inplace = True
     return opts
 
 
