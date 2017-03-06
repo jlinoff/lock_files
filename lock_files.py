@@ -83,7 +83,7 @@ except ImportError:
     import queue   # python3
 
 
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 
 
 # CITATION: http://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
