@@ -40,6 +40,22 @@ function Pass() {
     printf "test:%03d:%03d:passed %s\n" $Total "$Tid" "$Memo"
 }
 
+function Runcmd() {
+    local Cmd="$*"
+    local LineNum=${BASH_LINENO[0]}
+    echo
+    echo "INFO:${LineNum}: cmd.run=$Cmd"
+    eval "$Cmd"
+    local st=$?
+    echo "INFO:${LineNum}: cmd.status=$st"
+    if (( st )) ; then
+        echo "ERROR:${LineNum}: command failed"
+        return 1
+    else
+        return 0
+    fi
+}
+
 function Done() {
     echo
     printf "test:total:passed  %3d\n" $Passed
@@ -68,13 +84,14 @@ rm -f test*.txt*
 # Test simple lock.
 cp file1.txt test.txt
 tid=${LINENO}
-$Prog -P secret --lock test.txt
+Runcmd $Prog -P secret --lock test.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
 else
     Fail $tid "lock-run"
 fi
+Runcmd cat -n test.txt.locked
 
 # Make sure that the locked file exists.
 tid=${LINENO}
@@ -86,7 +103,7 @@ fi
 
 # Test simple unlock.
 tid=${LINENO}
-$Prog -P secret --unlock test.txt.locked
+Runcmd $Prog -P secret --unlock test.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -104,7 +121,7 @@ fi
 
 # Make sure that the contents did not change.
 tid=${LINENO}
-diff file1.txt test.txt
+Runcmd diff file1.txt test.txt
 if (( $? == 0 )) ; then
     Pass $tid "nodiff"
 else
@@ -112,10 +129,10 @@ else
 fi
     
 # Now try globbing and locking.
-cp file1.txt test1.txt
-cp file2.txt test2.txt
+Runcmd cp file1.txt test1.txt
+Runcmd cp file2.txt test2.txt
 tid=${LINENO}
-$Prog -P secret --lock test[12].txt
+Runcmd $Prog -P secret --lock test[12].txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -140,7 +157,7 @@ fi
 
 # Now try globbing and unlocking.
 tid=${LINENO}
-$Prog -P secret --unlock test[12]*.locked
+Runcmd $Prog -P secret --unlock test[12]*.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -164,7 +181,7 @@ else
 fi
 
 tid=${LINENO}
-diff file1.txt test1.txt
+Runcmd diff file1.txt test1.txt
 if (( $? == 0 )) ; then
     Pass $tid "nodiff1"
 else
@@ -172,7 +189,7 @@ else
 fi
 
 tid=${LINENO}
-diff file2.txt test2.txt
+Runcmd diff file2.txt test2.txt
 if (( $? == 0 )) ; then
     Pass $tid "nodiff2"
 else
@@ -180,9 +197,9 @@ else
 fi
 
 # Try a different suffix.
-cp file1.txt test1.txt
+Runcmd cp file1.txt test1.txt
 tid=${LINENO}
-$Prog -P secret -s '.FOO' --lock test1.txt
+Runcmd $Prog -P secret -s '.FOO' --lock test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -200,7 +217,7 @@ fi
 
 # Test simple unlock.
 tid=${LINENO}
-$Prog -P secret -s '.FOO' --unlock test1.txt.FOO
+Runcmd $Prog -P secret -s '.FOO' --unlock test1.txt.FOO
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -217,9 +234,9 @@ else
 fi
 
 # Test simple lock using short forms.
-cp file1.txt test1.txt
+Runcmd cp file1.txt test1.txt
 tid=${LINENO}
-$Prog -P secret -l test1.txt
+Runcmd $Prog -P secret -l test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -237,7 +254,7 @@ fi
 
 # Test simple unlock.
 tid=${LINENO}
-$Prog -P secret -u test1.txt.locked
+Runcmd $Prog -P secret -u test1.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -256,7 +273,7 @@ fi
 # Test simple lock using default and forms.
 cp file1.txt test1.txt
 tid=${LINENO}
-$Prog -P secret test1.txt
+Runcmd $Prog -P secret test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -274,7 +291,7 @@ fi
 
 # Test simple unlock.
 tid=${LINENO}
-$Prog -P secret -u test1.txt.locked
+Runcmd $Prog -P secret -u test1.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -292,13 +309,13 @@ fi
 
 # Test directories - recurse.
 # setup
-rm -rf tmp
-mkdir tmp
-cp file1.txt tmp/
-mkdir tmp/tmp
-cp file1.txt tmp/tmp
-cp file2.txt tmp/tmp
-tree tmp
+Runcmd rm -rf tmp
+Runcmd mkdir tmp
+Runcmd cp file1.txt tmp/
+Runcmd mkdir tmp/tmp
+Runcmd cp file1.txt tmp/tmp
+Runcmd cp file2.txt tmp/tmp
+Runcmd tree tmp
 
 tid=${LINENO}
 if [ -e "tmp/tmp/file1.txt" ] ; then
@@ -322,7 +339,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v tmp
+Runcmd $Prog -P secret -v -v tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -351,10 +368,10 @@ else
     Fail $tid "setup"
 fi
 
-tree tmp
+Runcmd tree tmp
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock tmp
+Runcmd $Prog -P secret -v -v --unlock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -383,17 +400,17 @@ else
     Fail $tid "setup"
 fi
 
-tree tmp
-rm -rf tmp
+Runcmd tree tmp
+Runcmd rm -rf tmp
 
 # Test directories - no recurse.
 # setup
-rm -rf tmp
-mkdir tmp
-cp file1.txt tmp/
-mkdir tmp/tmp
-cp file1.txt tmp/tmp
-tree tmp
+Runcmd rm -rf tmp
+Runcmd mkdir tmp
+Runcmd cp file1.txt tmp/
+Runcmd mkdir tmp/tmp
+Runcmd cp file1.txt tmp/tmp
+Runcmd tree tmp
 
 tid=${LINENO}
 if [ -e "tmp/tmp/file1.txt" ] ; then
@@ -410,7 +427,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v -n tmp
+Runcmd $Prog -P secret -v -v -n tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -435,7 +452,7 @@ fi
 tree tmp
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock tmp
+Runcmd $Prog -P secret -v -v --unlock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -457,14 +474,14 @@ else
     Fail $tid "setup"
 fi
 
-tree tmp
-rm -rf tmp
+Runcmd tree tmp
+Runcmd rm -rf tmp
 
 # test continue --cont, -c
-cp file1.txt test1.txt
-cp file2.txt test2.txt
+Runcmd cp file1.txt test1.txt
+Runcmd cp file2.txt test2.txt
 tid=${LINENO}
-$Prog -P secret -v -v --lock -c test1.txt testXXX.txt test2.txt
+Runcmd $Prog -P secret -v -v --lock -c test1.txt testXXX.txt test2.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -487,7 +504,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock -c test1.txt.locked testXXX.txt.locked test2.txt.locked
+Runcmd $Prog -P secret -v -v --unlock -c test1.txt.locked testXXX.txt.locked test2.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -510,9 +527,9 @@ else
 fi
 
 # test locked extension.
-cp file1.txt test1.txt.locked
+Runcmd cp file1.txt test1.txt.locked
 tid=${LINENO}
-$Prog -P secret -v -v --lock test1.txt.locked
+Runcmd $Prog -P secret -v -v --lock test1.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -528,7 +545,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock -c test1.txt.locked.locked
+Runcmd $Prog -P secret -v -v --unlock -c test1.txt.locked.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -543,15 +560,15 @@ else
     Fail $tid "setup"
 fi
 
-rm -f test1.txt.locked
+Runcmd rm -f test1.txt.locked
 
 # Test overwrite functionality.
 # -s '' -o
-cp file1.txt test1.txt
-wc test1.txt
-sum test1.txt
+Runcmd cp file1.txt test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 tid=${LINENO}
-$Prog -P secret -v -v --lock -o -s '' test1.txt
+Runcmd $Prog -P secret -v -v --lock -o -s '' test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -573,11 +590,11 @@ else
     Fail $tid "file-found"
 fi
 
-wc test1.txt
-sum test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock -o -s '' test1.txt
+Runcmd $Prog -P secret -v -v --unlock -o -s '' test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -592,15 +609,15 @@ else
     Fail $tid "file-found"
 fi
 
-wc test1.txt
-sum test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 
 # Test inplace mode.
-cp file1.txt test1.txt
-wc test1.txt
-sum test1.txt
+Runcmd cp file1.txt test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 tid=${LINENO}
-$Prog -P secret -v -v --lock -i test1.txt
+Runcmd $Prog -P secret -v -v --lock -i test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -622,11 +639,11 @@ else
     Fail $tid "file-found"
 fi
 
-wc test1.txt
-sum test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock -i test1.txt
+Runcmd $Prog -P secret -v -v --unlock -i test1.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -641,8 +658,8 @@ else
     Fail $tid "file-found"
 fi
 
-wc test1.txt
-sum test1.txt
+Runcmd wc test1.txt
+Runcmd sum test1.txt
 
 # Test different lengths to verify padding.
 for(( i=1; i<=32; i++ )) ; do
@@ -673,8 +690,8 @@ done
 
 # Test different processing of 100 files to verify threading.
 info 'setup for jobs test'
-rm -rf tmp
-mkdir tmp
+Runcmd rm -rf tmp
+Runcmd mkdir tmp
 for(( i=1; i<=200; i++ )) ; do
     fn=$(echo "$i" | awk '{printf("tmp/test%03d.txt", $1)}')
     cp file1.txt "$fn"
@@ -696,7 +713,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v --lock tmp
+Runcmd $Prog -P secret -v -v --lock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-lock"
@@ -705,7 +722,7 @@ else
 fi
 
 tid=${LINENO}
-$Prog -P secret -v -v --unlock tmp
+Runcmd $Prog -P secret -v -v --unlock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-unlock"
@@ -716,8 +733,8 @@ fi
 # performance analysis (10 threads)
 # Use big files.
 info 'setup for jobs performance analysis'
-rm -rf tmp
-mkdir tmp
+Runcmd rm -rf tmp
+Runcmd mkdir tmp
 for(( i=1; i<=200; i++ )) ; do
     fn=$(echo "$i" | awk '{printf("tmp/test%03d.txt", $1)}')
     if (( i == 1 )) ; then
@@ -746,7 +763,7 @@ else
 fi
 
 tid=${LINENO}
-time $Prog -P secret -v -j 10 --lock tmp
+Runcmd time $Prog -P secret -v -j 10 --lock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-th10-lock"
@@ -755,7 +772,7 @@ else
 fi
 
 tid=${LINENO}
-time $Prog -P secret -v -j 10 --unlock tmp
+Runcmd time $Prog -P secret -v -j 10 --unlock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-th10-unlock"
@@ -765,7 +782,7 @@ fi
 
 # performance analysis (1 thread)
 tid=${LINENO}
-time $Prog -P secret -v -j 1 --lock tmp
+Runcmd time $Prog -P secret -v -j 1 --lock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-th1-lock"
@@ -774,7 +791,7 @@ else
 fi
 
 tid=${LINENO}
-time $Prog -P secret -v -j 1 --unlock tmp
+Runcmd time $Prog -P secret -v -j 1 --unlock tmp
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "job-th1-unlock"
@@ -782,6 +799,6 @@ else
     Fail $tid "job-th1-unlock"
 fi
 
-rm -rf test*.txt* tmp *~
+Runcmd rm -rf test*.txt* tmp *~
 
 Done
