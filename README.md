@@ -6,36 +6,82 @@ This is a python command line tool to lock (encrypt) or unlock (decrypt) files u
 encryption and a common password. This version works in python2 and python3.
 
 ## Overview
-You can use it lock files before they are uploaded to storage services like DropBox or Google Drive.
+You can use it to lock files before they are uploaded to storage services like DropBox or Google Drive.
 
-The password can be stored in a safe file, specified on the command line or it can be manually entered each time the tool is run.
+The files are locked/encrypted using AES-CBC mode from the pycrypto package (`import Crypto`) so the source is useful for understanding
+how to use this package. The encrypted data is encoded in base64 and broken into 72 character lines so that the output is ASCII with
+no very long lines. That makes it convenient for copying. You can change the line length using the `-w` option.
 
+To encrypt files you need to specify a password. The password can be stored in a safe file (`-p`), specified on the command line in plaintext (`-P`) or it can be manually entered each time the tool is run from a password prompt.
+
+In the examples below, `-P` is used to specify a password on the command line in plaintext. This is only for convenience. Normally
+specifying a plaintext password is a bad idea for any production work because it will show up in the shell history.
+
+The tool checks each file to make sure that it is writeable before processing. If any files are not writeable,
+it means that they cannot be changed so the program aborts unless you specified the continue `-c` option. Files up until that point
+are locked but they can easily be unlocked.
+
+You can use the `-v -v` option to see details about each file being processed.
+
+You can specify `-j` to increase or decrease the number of threads. This program, like all Python programs, is subject to the
+limitations of the Global Interpreter Lock (GIL) so your multi-threading performance improvement may not be what you
+expect and may be different between Python 2.7 and 3.x.
+
+The program is re-entrant which means that you can run lock a single file multiple times with different passwords. 
+Each new password will append an additional `.locked` extension. If you don't like the `.locked` extension, you can change it
+using the `-s` (suffix) option.
+
+### Simple Lock/Unlock
 Lets start with the simplest case, locking and unlocking a simple file using the password `secret`. The file is `file.txt`.
 
 ```bash
 $ ls file.txt*
 file.txt
+$ cat -n file.txt
+     1	Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+     2	eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+     3	minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+     4	aliquip ex ea commodo consequat. Duis aute irure dolor in
+     5	reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+     6	pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+     7	culpa qui officia deserunt mollit anim id est laborum.
 $ lock_files.py -P secret --lock file.txt
 $ ls file.txt*
 file.txt.locked
+$ cat -n file.txt.locked
+     1	mkpk82pjztGcqTD5y1MnM62Lb8M8+ccS5lB8+YHSqoB3BwrZ+ahzyEjqoEbqMNHvlFqZPYAh
+     2	CQzhtnDodCca1tt/sJ6vaHIUp10LNVQmxUN2N5tbAZ8YAvihbG6c/t0x3qbUvwLy/HI4+Dig
+     3	RAoASHSSNuTQJTdDNqvx4mD7bs/GGj1ljBYWPcWR04s780gY3JO8BIL8B0jvHgjwofc596MM
+     4	3ItylXw97/On6iqCJzToyxNPPGc11tkEiR98YON2kArk8JWnKhi7RZOoXJCD9/dS0EeIMOp1
+     5	Bi71EXmBAgWsHWtfs9NUCyQViCHUX9WMqJWdsIWP0LVhsqcfyUUxuruZD6VpcEc2A0puTNGF
+     6	Jh2n9jUqdcLDv+Y/FfD2eYzoSWp+vHyNpP2qePD7jRepWfIYqsvMyqIhfktIi/dyeM28X+Nx
+     7	v4+2QWtjz9PSOvzUwFG28NyUONeaJzwLZa8A8HFQPl/zIraqpZg34iRZJkHQtPZ3aveI9yc+
+     8	E+6esv/Wo07qiffozyEykrOT+fJ1HbhTdkzjZtq1fQxP9LE367zjwdzex99dTL14dHcSN9kW
+     9	2s4Qxg4ZQ8eAqwLX3c4VnIqUeh0aqqjKJqKqftjDBVg=
 $ lock_files.py -P secret --unlock file.txt.locked
 $ ls file.txt*
 file.txt
 ```
 
 From this example you can see that the input file is encrypted/locked and is stored in `file.txt.locked`. It is then decrypted/unlocked
-back to the original file `file.txt`. This is the normal mode of operation. There is another mode called _in place_ that is
-explained and demonstrated in the next example but before talking about that it is important to note that the above example just
-as easily be done using openssl directly like this.
+back to the original file `file.txt`. This is the normal mode of operation. 
+
+There is another mode called _in place_ that does away with the `.locked` extgension. It is explained and demonstrated a bit later
+but before talking about that in detail, it is important to note that the above example can be done just as easily using a common
+tool like `openssl` as follows.
 
 ```bash
 $ openssl aes-256-cbc -pass pass:secret -e -a -salt -in file.txt -out file.txt.lock
 $ openssl aes-256-cbc -pass pass:secret -d -a -salt -in file.txt.lock -out file.txt
 ```
 
-So why use lock_files.py? For a single file _there is no good reason_ but because it handles multiple files and directories,
-you definitely want to consider using it for groups of files. I suppose that an argument could be made for a single file because
-the command line is a bit simpler but that is definitely not a strong argument.
+So why use lock_files.py?
+
+For a single file _there is probably no good reason_ but because it handles multiple files and directories,
+you definitely want to consider using it for groups of files. 
+
+> I suppose that an argument could be made for a single file because
+> the command line is a bit simpler but it is definitely not a strong argument.
 
 Here is an example that shows how to lock groups of files. It locks all of the files in the secrets directory and all files with
 the `.confidential` extension:
@@ -52,32 +98,29 @@ $ lock_files.py -P secret -v -v --unlock secrets *.confidential.locked
 
 Note that for directories, you don't need to worry about the `.locked` extension.
 
-Here is how you would use this tool to encrypt a number of files _in place_. The term _in place_ means
-not appending the `.locked` suffix to each file name that was locked (e.g. encrypted). _In place_ is not secure because data
-will be lost if the disk fills up during a write operation and it is not able to complete.
+### In Place Mode
+Now lets consider the _in place_ mode. The term _in place_ means not appending the `.locked` suffix to each file name that was locked.
+Here is how you would use this tool to lock/unlock files _in place_ using the above example with
+the `secret` directory and the files with the `.confidential` extensions.
 
-    $ cat >password-file
-    thisismysecretpassword
-    EOF
-    $ chmod 0600 password-file
-    $ lock_files.py -p ./password-file -i -l file1.txt file2.txt dir1 dir2
+```bash
+$ lock_files.py -P secret -i --lock secrets *.confidential
+$ lock_files.py -P secret -i --unlock secrets *.confidential
+```
 
-Here is how you would use this tool to unlock (e.g. decrypt) a number of _in place_ locked files.
-Note that at this point `file1.txt` is actually encrypted.
+Note that you do _not_ have to use the `.locked` extension here because _it doesn't exist_. Each locked file has the same name as the
+unlocked file.
 
-    $ lock_files.py -p ./password-file -i -u file1.txt file2.txt dir1 dir2
+> Note that _in place_ is not secure because data will be lost if the disk fills up during a write operation
+> and it is not able to complete.
 
-Here is how you would use this tool to decrypt a file, execute a
-program and then re-encrypt it when the program exits.
+Here is how you could use _in place_ mode to decrypt a file, execute a program and then re-encrypt it when the program exits.
 
     $ lock_files.py -p ./password -i -u file1.txt
-    $ emacs file1.txt
+    $ edit confidential.txt
     $ lock_files.py -p ./password -i -l file1.txt
 
-The tool checks each file to make sure that it is writeable before processing. If any files are not writeable,
-it means that they cannot be changed so the program aborts unless you specified the continue `-c` option.
-
-If you specify -v -v (very verbose), you will see the operations on each file.
+This approach can be used to make sure that source files are always locked/encrypted when not in use.
 
 ## Download and Test
 Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
