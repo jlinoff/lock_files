@@ -88,7 +88,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.3'
+VERSION = '1.0.4'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -334,13 +334,20 @@ def read_file(opts, path, stats):
         return None
 
 
-def write_file(opts, path, content, stats):
+def write_file(opts, path, content, stats, bsize=0):
     '''
     Write the file.
     '''
     try:
         with open(path, 'wb') as ofp:
-            ofp.write(content)
+            if bsize < 1:
+                ofp.write(content)
+            else:
+                i = 0
+                nl = '\n' if isinstance(content, str) else b'\n'
+                while i < len(content):
+                    ofp.write(content[i:i+bsize] + nl)
+                    i += bsize
             stat_inc(stats, 'written', len(content))
     except IOError as exc:
         get_cont_fct(opts)('failed to write file "{}": {}'.format(path, exc))
@@ -360,7 +367,7 @@ def lock_file(opts, password, path, stats):
         try:
             aes = AESCipher(password)
             data = aes.encrypt(content)
-            if write_file(opts, out, data, stats) is True and th_abort is False:
+            if write_file(opts, out, data, stats, bsize=opts.bsize) is True and th_abort is False:
                 if out != path:
                     os.remove(path)  # remove the input
                 stat_inc(stats, 'locked')
@@ -583,8 +590,8 @@ def getopts():
    #            The file name does not change but the content.
    #            It is compatible with the default mode of operation in
    #            previous releases.
-   #            This mode of operation is not recommended because
-   #            data will be lost if the disk fills up during a write.
+   #            This mode of operation is not recommended because data
+   #            will be lost if the disk fills up during a write.
    $ {0} -P 'secret' -i -l file.txt
    $ ls file.txt*
    file.txt
@@ -615,14 +622,26 @@ PROJECT:
 
     group1 = parser.add_mutually_exclusive_group()
 
+    parser.add_argument('-b', '--bsize',
+                        action='store',
+                        type=int,
+                        default=72,
+                        help='''The size of each encrypted line where a block
+is the portion of encrypted data that is
+printed on each line.
+Default: %(default)s
+ ''')
+
     # Note that I cannot use --continue here because opts.continue
     # would try to reference a python keyword 'continue' and fail.
     parser.add_argument('-c', '--cont',
                         action='store_true',
                         help='''Continue if a single file lock/unlock fails.
-Normally if the program tries to modify a fail and that modification
-fails, an error is reported and the programs stops. This option causes
-that event to be treated as a warning so the program continues.
+Normally if the program tries to modify a
+fail and that modification fails, an error is
+reported and the programs stops. This option
+causes that event to be treated as a warning
+so the program continues.
  ''')
 
     parser.add_argument('-d', '--decrypt',
@@ -647,9 +666,10 @@ Overwrite files in place.
 It is the same as specifying:
    -o -s ''
 
-This is a dangerous because a disk full operation can cause data to be
-lost when a write fails. This allows you to duplicate the behavior of
-the previous version.
+This is a dangerous because a disk full
+operation can cause data to be lost when a
+write fails. This allows you to duplicate the
+behavior of the previous version.
  ''')
 
     nc = get_num_cores()
@@ -660,8 +680,9 @@ the previous version.
                         metavar=('NUM_THREADS'),
                         help='''Specify the maximum number of active threads.
 
-This can be helpful if there a lot of large files to process where
-large refers to files larger than a MB.
+This can be helpful if there a lot of large
+files to process where large refers to files
+larger than a MB.
 
 Default: %(default)s
  ''')
@@ -669,34 +690,40 @@ Default: %(default)s
     parser.add_argument('-l', '--lock',
                         action='store_true',
                         help='''Lock files.
-Files are locked and the ".locked" extension is appended unless
-the --suffix option is specified.
+Files are locked and the ".locked" extension
+is appended unless the --suffix option is
+specified.
  ''')
 
     parser.add_argument('-o', '--overwrite',
                         action='store_true',
                         help='''Overwrite files that already exist.
-This can be used in conjunction disable file existence checks.
+This can be used in conjunction disable file
+existence checks.
+
 It is used by the --inplace mode.
  ''')
 
     parser.add_argument('-n', '--no-recurse',
                         action='store_true',
-                        help='''Do not automatically recurse into subdirectories.
+                        help='''Do not automatically recurse into
+subdirectories.
  ''')
 
     group1.add_argument('-p', '--password-file',
                         action='store',
                         type=str,
                         help='''file that contains the password.
-The default behavior is to prompt for the password.
+The default behavior is to prompt for the
+password.
  ''')
 
     group1.add_argument('-P', '--password',
                         action='store',
                         type=str,
                         help='''Specify the password on the command line.
-This is not secure because it is visible in the command history.
+This is not secure because it is visible in
+the command history.
  ''')
 
     parser.add_argument('-s', '--suffix',
@@ -711,8 +738,11 @@ Default: %(default)s
     parser.add_argument('-u', '--unlock',
                         action='store_true',
                         help='''Unlock files.
-Files with the ".locked" extension are unlocked.
-If the --suffix option is specified, that extension is used instead of ".locked".
+Files with the ".locked" extension are
+unlocked.
+
+If the --suffix option is specified, that
+extension is used instead of ".locked".
  ''')
 
     parser.add_argument('-v', '--verbose',
@@ -720,7 +750,9 @@ If the --suffix option is specified, that extension is used instead of ".locked"
                         default=0,
                         help='''Increase the level of verbosity.
 A single -v generates a summary report.
-Two or more -v options show all of the files being processed.
+
+Two or more -v options show all of the files
+being processed.
  ''')
 
     # Display the version number and exit.
