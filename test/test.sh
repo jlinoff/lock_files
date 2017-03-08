@@ -128,6 +128,54 @@ else
     Fail $tid "nodiff"
 fi
     
+
+# Test lock with line lock width (--wll set).
+cp file1.txt test.txt
+tid=${LINENO}
+Runcmd $Prog -P secret -w 64 --lock test.txt
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "lock-run"
+else
+    Fail $tid "lock-run"
+fi
+Runcmd cat -n test.txt.locked
+
+# Make sure that the locked file exists.
+tid=${LINENO}
+if [ -e 'test.txt.locked' ] ; then
+    Pass $tid "lock-exists"
+else
+    Fail $tid "lock-exists"
+fi
+
+# Test simple unlock.
+tid=${LINENO}
+Runcmd $Prog -P secret --unlock test.txt.locked
+st=$?
+if (( $st == 0 )) ; then
+    Pass $tid "unlock-run"
+else
+    Fail $tid "unlock-run"
+fi
+
+# Make sure that the unlocked file exists.
+tid=${LINENO}
+if [ -e 'test.txt' ] ; then
+    Pass $tid "unlock-exists"
+else
+    Fail $tid "unlock-exists"
+fi
+
+# Make sure that the contents did not change.
+tid=${LINENO}
+Runcmd diff file1.txt test.txt
+if (( $? == 0 )) ; then
+    Pass $tid "nodiff"
+else
+    Fail $tid "nodiff"
+fi
+    
 # Now try globbing and locking.
 Runcmd cp file1.txt test1.txt
 Runcmd cp file2.txt test2.txt
