@@ -88,7 +88,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.4'
+VERSION = '1.0.5'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -334,20 +334,20 @@ def read_file(opts, path, stats):
         return None
 
 
-def write_file(opts, path, content, stats, bsize=0):
+def write_file(opts, path, content, stats, width=0):
     '''
     Write the file.
     '''
     try:
         with open(path, 'wb') as ofp:
-            if bsize < 1:
+            if width < 1:
                 ofp.write(content)
             else:
                 i = 0
                 nl = '\n' if isinstance(content, str) else b'\n'
                 while i < len(content):
-                    ofp.write(content[i:i+bsize] + nl)
-                    i += bsize
+                    ofp.write(content[i:i+width] + nl)
+                    i += width
             stat_inc(stats, 'written', len(content))
     except IOError as exc:
         get_cont_fct(opts)('failed to write file "{}": {}'.format(path, exc))
@@ -367,7 +367,7 @@ def lock_file(opts, password, path, stats):
         try:
             aes = AESCipher(password)
             data = aes.encrypt(content)
-            if write_file(opts, out, data, stats, bsize=opts.bsize) is True and th_abort is False:
+            if write_file(opts, out, data, stats, width=opts.wll) is True and th_abort is False:
                 if out != path:
                     os.remove(path)  # remove the input
                 stat_inc(stats, 'locked')
@@ -622,16 +622,6 @@ PROJECT:
 
     group1 = parser.add_mutually_exclusive_group()
 
-    parser.add_argument('-b', '--bsize',
-                        action='store',
-                        type=int,
-                        default=72,
-                        help='''The size of each encrypted line where a block
-is the portion of encrypted data that is
-printed on each line.
-Default: %(default)s
- ''')
-
     # Note that I cannot use --continue here because opts.continue
     # would try to reference a python keyword 'continue' and fail.
     parser.add_argument('-c', '--cont',
@@ -761,6 +751,20 @@ being processed.
                         version='%(prog)s version {0}'.format(VERSION),
                         help="""Show program's version number and exit.
  """)
+
+    parser.add_argument('-w', '--wll',
+                        action='store',
+                        type=int,
+                        default=72,
+                        metavar=('INTEGER'),
+                        help='''The width of each locked/encrypted line.
+This is important because text files with
+very, very long can sometimes cause problems
+during uploads. If set to zero, no new lines
+are inserted.
+
+Default: %(default)s
+''')
 
     # Positional arguments at the end.
     parser.add_argument('FILES',
