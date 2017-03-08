@@ -174,9 +174,11 @@ OPTIONAL ARGUMENTS:
   -h, --help            Show this help message and exit.
                          
   -c, --cont            Continue if a single file lock/unlock fails.
-                        Normally if the program tries to modify a fail and that modification
-                        fails, an error is reported and the programs stops. This option causes
-                        that event to be treated as a warning so the program continues.
+                        Normally if the program tries to modify a
+                        fail and that modification fails, an error is
+                        reported and the programs stops. This option
+                        causes that event to be treated as a warning
+                        so the program continues.
                          
   -d, --decrypt         Unlock/decrypt files.
                         This option is deprecated.
@@ -192,50 +194,71 @@ OPTIONAL ARGUMENTS:
                         It is the same as specifying:
                            -o -s ''
                         
-                        This is a dangerous because a disk full operation can cause data to be
-                        lost when a write fails. This allows you to duplicate the behavior of
-                        the previous version.
+                        This is a dangerous because a disk full
+                        operation can cause data to be lost when a
+                        write fails. This allows you to duplicate the
+                        behavior of the previous version.
                          
   -j NUM_THREADS, --jobs NUM_THREADS
                         Specify the maximum number of active threads.
                         
-                        This can be helpful if there a lot of large files to process where
-                        large refers to files larger than a MB.
+                        This can be helpful if there a lot of large
+                        files to process where large refers to files
+                        larger than a MB.
                         
                         Default: 8
-
+                         
   -l, --lock            Lock files.
-                        Files are locked and the ".locked" extension is appended unless
-                        the --suffix option is specified.
+                        Files are locked and the ".locked" extension
+                        is appended unless the --suffix option is
+                        specified.
                          
   -o, --overwrite       Overwrite files that already exist.
-                        This can be used in conjunction disable file existence checks.
+                        This can be used in conjunction disable file
+                        existence checks.
+                        
                         It is used by the --inplace mode.
                          
-  -n, --no-recurse      Do not automatically recurse into subdirectories.
+  -n, --no-recurse      Do not automatically recurse into
+                        subdirectories.
                          
   -p PASSWORD_FILE, --password-file PASSWORD_FILE
                         file that contains the password.
-                        The default behavior is to prompt for the password.
+                        The default behavior is to prompt for the
+                        password.
                          
   -P PASSWORD, --password PASSWORD
                         Specify the password on the command line.
-                        This is not secure because it is visible in the command history.
+                        This is not secure because it is visible in
+                        the command history.
                          
   -s EXTENSION, --suffix EXTENSION
                         Specify the extension used for locked files.
                         Default: .locked
                          
   -u, --unlock          Unlock files.
-                        Files with the ".locked" extension are unlocked.
-                        If the --suffix option is specified, that extension is used instead of ".locked".
+                        Files with the ".locked" extension are
+                        unlocked.
+                        
+                        If the --suffix option is specified, that
+                        extension is used instead of ".locked".
                          
   -v, --verbose         Increase the level of verbosity.
                         A single -v generates a summary report.
-                        Two or more -v options show all of the files being processed.
+                        
+                        Two or more -v options show all of the files
+                        being processed.
                          
   -V, --version         Show program's version number and exit.
                          
+  -w INTEGER, --wll INTEGER
+                        The width of each locked/encrypted line.
+                        This is important because text files with
+                        very, very long can sometimes cause problems
+                        during uploads. If set to zero, no new lines
+                        are inserted.
+                        
+                        Default: 72
 
 EXAMPLES:
    # Example 1: help
@@ -265,8 +288,8 @@ EXAMPLES:
    #            The file name does not change but the content.
    #            It is compatible with the default mode of operation in
    #            previous releases.
-   #            This mode of operation is not recommended because
-   #            data will be lost if the disk fills up during a write.
+   #            This mode of operation is not recommended because data
+   #            will be lost if the disk fills up during a write.
    $ lock_files.py -P 'secret' -i -l file.txt
    $ ls file.txt*
    file.txt
