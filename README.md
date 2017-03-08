@@ -33,9 +33,9 @@ $ openssl aes-256-cbc -pass pass:secret -e -a -salt -in file.txt -out file.txt.l
 $ openssl aes-256-cbc -pass pass:secret -d -a -salt -in file.txt.lock -out file.txt
 ```
 
-So why use lock_files.py? For a single file there is no good readon but because it handles multiple files and directories,
-you definitely want to consider for groups of files. I suppose that an argument could be made the even for a single file the command
-line is a bit simpler but that is definitely not a strong argument.
+So why use lock_files.py? For a single file _there is no good reason_ but because it handles multiple files and directories,
+you definitely want to consider using it for groups of files. I suppose that an argument could be made the even for a single file
+he command line is a bit simpler but that is definitely not a strong argument.
 
 Here is an example that shows how to lock groups of files. It locks all of the files in the secrets directory and all files with
 the `.confidential` extension:
