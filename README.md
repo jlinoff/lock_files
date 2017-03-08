@@ -25,7 +25,32 @@ file.txt
 
 From this example you can see that the input file is encrypted/locked and is stored in `file.txt.locked`. It is then decrypted/unlocked
 back to the original file `file.txt`. This is the normal mode of operation. There is another mode called _in place_ that is
-explained and demonstrated in the next example.
+explained and demonstrated in the next example but before talking about that it is important to note that above example just
+as easily be done using openssl directly like this.
+
+```bash
+$ openssl aes-256-cbc -pass pass:secret -e -a -salt -in file.txt -out file.txt.lock
+$ openssl aes-256-cbc -pass pass:secret -d -a -salt -in file.txt.lock -out file.txt
+```
+
+So why use lock_files.py? For a single file there is no good readon but because it handles multiple files and directories,
+you definitely want to consider for groups of files. I suppose that an argument could be made the even for a single file the command
+line is a bit simpler but that is definitely not a strong argument.
+
+Here is an example that shows how to lock groups of files. It locks all of the files in the secrets directory and all files with
+the `.confidential` extension:
+
+```bash
+$ lock_files.py -P secret -v -v --lock secrets *.confidential
+```
+
+And here is how you unlock them.
+
+```bash
+$ lock_files.py -P secret -v -v --unlock secrets *.confidential.locked
+```
+
+Note that for directories, you don't need to worry about the `.locked` extension.
 
 Here is how you would use this tool to encrypt a number of files _in place_ using a local, secure file. The term _in place_ means
 not appending the `.locked` suffix to each file name that was locked (e.g. encrypted). _In place_ is not secure because data
