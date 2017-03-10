@@ -88,7 +88,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.5'
+VERSION = '1.0.6'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -518,7 +518,7 @@ def get_password(opts):
 
     # User specified the password in a file. It should be 0600.
     if opts.password_file:
-        if os.path.exists(opts.password_file):
+        if not os.path.exists(opts.password_file):
             err("password file doesn't exist: {}".format(opts.password_file))
         password = None
         ifp = open(opts.password_file, 'rb')
