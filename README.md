@@ -117,10 +117,48 @@ unlocked file.
 Here is how you could use _in place_ mode to decrypt a file, execute a program and then re-encrypt it when the program exits.
 
     $ lock_files.py -p ./password -i -u file1.txt
-    $ edit confidential.txt
+    $ edit file1.txt
     $ lock_files.py -p ./password -i -l file1.txt
 
 This approach can be used to make sure that source files are always locked/encrypted when not in use.
+
+### Password Files
+Here is how you could generate a password file and use it to lock and unlock files.
+
+```bash
+$ cat -n file.txt
+     1	Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+     2	eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+     3	minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+     4	aliquip ex ea commodo consequat. Duis aute irure dolor in
+     5	reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+     6	pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+     7	culpa qui officia deserunt mollit anim id est laborum.
+$ LC_CTYPE=C tr -dc A-Za-z0-9_\- < /dev/urandom | head -c 32  | args >passfile
+$ chmod 0600 passfile
+$ cat passfile
+uWE8j_iwFabRrzZQu_0_sWecH1zJZf7p
+$ lock_files.py -p passfile -l file.txt
+$ cat file.txt.locked 
+     1	8b/KZ+3TEEdEVm51FPLcj6CDdAoN3QlFQ208IPBa3qb58zWQ+X9K/ZKHPKPweA1pemH83XSA
+     2	FYGaU8LMx5wCcf7yzhf/hMiFOR5MNoAONsZ58e9BJRz4Q35oYiyA4z2o5TK485NEekKqAU8j
+     3	0UiYjOfH1zkX56LPR3cas+rnxQQA1srXtnvY7XwaGJx856sQQ3hgpfHnjTkvMo3wfiwDv0Lm
+     4	gRCQigDuZaa222g+fZW7hGRluwtrS7/6QX40J78/jLNehJnioc+tRLJyHJQUAO3QkA+DVODS
+     5	BCtaCa+ueVRpcfcuOKCvNLuwV82RQSR3KW+EZWq3hphSqNRp7iYZne0hD5uRJHs1uu2tm6ca
+     6	HmwgGpy+yfcuYYRBmwQy9kMRzNB6xN8IEH4Mo0blCfVReKNQELE9gOfL1g3LMM62/a8IROhw
+     7	g3h/Rsh//vlstE/3FlSQnzhZ9o6CItz/TjCRQ9oiBvQeVrZTZ1tkoiWeysY/DGnfc+Y+rSMG
+     8	m9GowOdzfPvLWzxJbEN8pj3LRYplowppZykySXQl7L6WVqGMg+wu1qhLyzMN1E6EUXyQNrXN
+     9	JAV1Pp+Ix+t9QQKkjh3+fEHkY++Ki69GxKnARFWrTtk=
+$ lock_files.py -p passfile -u file.txt.locked
+$ cat -n file.txt
+     1	Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+     2	eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+     3	minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+     4	aliquip ex ea commodo consequat. Duis aute irure dolor in
+     5	reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+     6	pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+     7	culpa qui officia deserunt mollit anim id est laborum.
+```
 
 ## Download and Test
 Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
