@@ -29,9 +29,10 @@ function Test() {
     local Cmd="$*"
     local LineNum=${BASH_LINENO[0]}
     (( Total++ ))
+    local Tid=$(printf '%03d' $Total)
     echo
     echo "INFO:${LineNum}: cmd.run=$Cmd"
-    printf "test:%03d:%s:cmd " $Total "$LineNum" "$Memo"
+    printf "test:%s:%s:cmd " $Tid "$LineNum" "$Memo"
     echo "$Cmd"
     eval "$Cmd"
     local st=$?
@@ -39,11 +40,11 @@ function Test() {
     if (( st )) ; then
         echo "ERROR:${LineNum}: command failed"
         (( Failed++ ))
-        printf "test:%03d:%s:failed %s\n" $Total "$LineNum" "$Memo"
+        printf "test:%s:%s:failed %s\n" $Tid "$LineNum" "$Memo"
         Done
     else
         (( Passed++ ))
-        printf "test:%03d:%03d:passed %s\n" $Total "$LineNum" "$Memo"
+        printf "test:%s:%03d:passed %s\n" $Tid "$LineNum" "$Memo"
     fi
 }
 
