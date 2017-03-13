@@ -161,6 +161,7 @@ $ cat -n file.txt
      6	pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
      7	culpa qui officia deserunt mollit anim id est laborum.
 ```
+
 ### Openssl compatibility
 By default the files encrypted by lock_files.py are not compatible with openssl. However, if you want your encrypted files to
 be decrypted by `openssl` or if you want lock_files.py to be able to unlock files that were decrypted by `openssl`, 
@@ -181,6 +182,9 @@ $ lock_files.py -c -P secret -u file.txt.locked
 ```
 
 When `-c` is specified on the command line, all files encrypted or decrypted will be able to be processed by openssl.
+
+> I want to re-emphasize that if you only want to encrypt/decrypt single files, use `openssl`, lock_files.py is only
+> mean to be used for groups of files.
 
 ## Download and Test
 Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
@@ -462,4 +466,192 @@ LICENSE:
 
 PROJECT:
    https://github.com/jlinoff/lock_files
+```
+
+## Internals
+The heart of this tool is the class shown below. It allows data to be encrypted/decrypted using the pycrypto package natively or in
+an openssl compatible format. It is based on work that I did years ago that is blogged here: http://joelinoff.com/blog/?p=885.
+
+```python
+class AESCipher:
+    '''
+    Class that provides an object to encrypt or decrypt a string
+    or a file.
+
+    CITATION: http://joelinoff.com/blog/?p=885
+    '''
+    def __init__(self, openssl=False, digest='md5', keylen=32, ivlen=16):
+        '''
+        Initialize the object.
+
+        @param openssl  Operate identically to openssl.
+        @param width    Width of the MIME encoded lines for encryption.
+        @param digest   The digest used.
+        @param keylen   The key length (32-256, 16-128, 8-64).
+        @param ivlen    Length of the initialization vector.
+        '''
+        self.m_openssl = openssl
+        self.m_openssl_prefix = b'Salted__'  # Hardcoded into openssl.
+        self.m_openssl_prefix_len = len(self.m_openssl_prefix)
+        self.m_digest = getattr(__import__('hashlib', fromlist=[digest]), digest)
+        self.m_keylen = keylen
+        self.m_ivlen = ivlen
+        if keylen not in [8, 16, 32]:
+            err('invalid keylen {}, must be 8, 16 or 32'.format(keylen))
+        if openssl and ivlen != 16:
+            err('invalid ivlen size {}, for openssl compatibility it must be 16'.format(ivlen))
+
+    def encrypt(self, password, plaintext):
+        '''
+        Encrypt the plaintext using the password using an openssl
+        compatible encryption algorithm. It is the same as creating a file
+        with plaintext contents and running openssl like this:
+
+            $ cat plaintext
+            <plaintext>
+            $ openssl enc -aes-256-cbc -e -a -salt -pass pass:<password> -in plaintext
+
+        @param password  The password.
+        @param plaintext The plaintext to encrypt.
+        @param msgdgst   The message digest algorithm.
+        '''
+        if self.m_openssl:
+            salt = os.urandom(self.m_ivlen - len(self.m_openssl_prefix))
+            key, iv = self._get_key_and_iv(password, salt)
+            if key is None:
+                return None
+
+            # Encrypt
+            padded_plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            ciphertext = cipher.encrypt(padded_plaintext)
+
+            # Make openssl compatible.
+            # I first discovered this when I wrote the C++ Cipher class.
+            # CITATION: http://projects.joelinoff.com/cipher-1.1/doxydocs/html/
+            openssl_ciphertext = self.m_openssl_prefix + salt + ciphertext
+            ciphertext = base64.b64encode(openssl_ciphertext)
+        else:
+            # No salt, no 'Salted__' prefix.
+            key = self._get_password_key(password)
+            plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
+            iv = Random.new().read(AES.block_size)
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            ciphertext = base64.b64encode(iv + cipher.encrypt(plaintext))
+        return ciphertext
+
+    def decrypt(self, password, ciphertext):
+        '''
+        Decrypt the ciphertext using the password using an openssl
+        compatible decryption algorithm. It is the same as creating a file
+        with ciphertext contents and running openssl like this:
+
+            $ cat ciphertext
+            <ciphertext>
+            $ egrep -v '^#|^$' | openssl enc -aes-256-cbc -d -a -salt -pass pass:<password> -in ciphertext
+
+        @param password   The password.
+        @param ciphertext The ciphertext to decrypt.
+        @returns the decrypted data.
+        '''
+        if self.m_openssl:
+            # Base64 decode
+            raw = base64.b64decode(ciphertext)
+            if raw[:self.m_openssl_prefix_len] != self.m_openssl_prefix:
+                err('bad header, cannot decrypt')
+            salt = raw[self.m_openssl_prefix_len:self.m_ivlen]  # get the salt
+
+            # Now create the key and iv.
+            key, iv = self._get_key_and_iv(password, salt)
+            if key is None:
+                return None
+
+            # The original ciphertext
+            ciphertext = raw[self.m_ivlen:]
+
+            # Decrypt
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            padded_plaintext = cipher.decrypt(ciphertext)
+            plaintext = self._pkcs7_unpad(padded_plaintext)
+        else:
+            key = self._get_password_key(password)
+            ciphertext = base64.b64decode(ciphertext)
+            iv = ciphertext[:AES.block_size]
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            plaintext = self._pkcs7_unpad(cipher.decrypt(ciphertext[AES.block_size:]))
+        return plaintext
+
+    def _get_password_key(self, password):
+        '''
+        Pad the password if necessary.
+
+        This is done by encrypt and decrypt.
+        '''
+        if len(password) >= self.m_keylen:
+            key = password[:self.m_keylen]
+        else:
+            key = self._pkcs7_pad(password, self.m_keylen)
+        return key
+
+    def _get_key_and_iv(self, password, salt):
+        '''
+        Derive the key and the IV from the given password and salt.
+
+        This is a niftier implementation than my direct transliteration of
+        the C++ code although I modified to support different digests.
+
+        @param password  The password to use as the seed.
+        @param salt      The salt.
+        '''
+        password = password.encode('utf-8', 'ignore')
+        try:
+            maxlen = self.m_keylen + self.m_ivlen
+            keyiv = self.m_digest(password + salt).digest()
+            tmp = [keyiv]
+            while len(tmp) < maxlen:
+                tmp.append(self.m_digest(tmp[-1] + password + salt).digest())
+                keyiv += tmp[-1]  # append the last byte
+            key = keyiv[:self.m_keylen]
+            iv = keyiv[self.m_keylen:self.m_keylen + self.m_ivlen]
+            return key, iv
+        except UnicodeDecodeError as exc:
+            err('failed to generate key and iv: {}'.format(exc))
+            return None, None
+
+    def _pkcs7_pad(self, text, size):
+        '''
+        PKCS#7 padding.
+
+        Pad to the boundary using a byte value that indicates
+        the number of padded bytes to make it easy to unpad
+        later.
+
+        @param text  The text to pad.
+        '''
+        num_bytes = size - (len(text) % size)
+
+        # Works for python3 and python2.
+        if isinstance(text, str):
+            text += chr(num_bytes) * num_bytes
+        elif isinstance(text, bytes):
+            text += bytearray([num_bytes] * num_bytes)
+        else:
+            assert False
+        return text
+
+    def _pkcs7_unpad(self, padded):
+        '''
+        PKCS#7 unpadding.
+
+        We padded with the number of characters to unpad.
+        Just get it and truncate the string.
+        Works for python3 and python2.
+        '''
+        if isinstance(padded, str):
+            unpadded_len = ord(padded[-1])
+        elif isinstance(padded, bytes):
+            unpadded_len = padded[-1]
+        else:
+            assert False
+        return padded[:-unpadded_len]
 ```
