@@ -28,6 +28,7 @@ function Test() {
     shift
     local Cmd="$*"
     local LineNum=${BASH_LINENO[0]}
+    (( Total++ ))
     echo
     echo "INFO:${LineNum}: cmd.run=$Cmd"
     printf "test:%03d:%s:cmd " $Total "$LineNum" "$Memo"
@@ -35,7 +36,6 @@ function Test() {
     eval "$Cmd"
     local st=$?
     echo "INFO:${LineNum}: cmd.status=$st"
-    (( Total++ ))
     if (( st )) ; then
         echo "ERROR:${LineNum}: command failed"
         (( Failed++ ))
