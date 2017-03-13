@@ -162,8 +162,9 @@ $ cat -n file.txt
      7	culpa qui officia deserunt mollit anim id est laborum.
 ```
 ### Openssl compatibility
-By default the files encrypted by lock_files.py are not compatible with openssl. However, if your encrypted files to be compatible or
-if you want lock_files.py to be able to unlock files that were decrypted by `openssl`, you can use compatibility mode (`-c`).
+By default the files encrypted by lock_files.py are not compatible with openssl. However, if you want your encrypted files to
+be decrypted by `openssl` or if you want lock_files.py to be able to unlock files that were decrypted by `openssl`, 
+you can use compatibility mode (`-c`).
 
 The example below shows how to use lock_files.py encrypt a file in compatibility mode and then decrypt it using openssl.
 
