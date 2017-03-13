@@ -761,7 +761,7 @@ info 'test openssl encrypt, lock_files decrypt'
 tid=${LINENO}
 Runcmd rm -f test.txt test.txt.locked
 Runcmd cp file1.txt test.txt
-Runcmd openssl enc -aes-256-cbc -e -a -pass pass:secret -in test.txt -out test.txt.locked
+Runcmd openssl enc -aes-256-cbc -e -a -salt -pass pass:secret -in test.txt -out test.txt.locked
 st=$?
 if (( st == 0 )) ; then
     Pass $tid "openssl-enc"
@@ -799,7 +799,7 @@ else
     Fail $tid "lock_files-enc"
 fi
 
-Runcmd openssl enc -aes-256-cbc -d -a -pass pass:secret -in test.txt.locked -out test.txt
+Runcmd openssl enc -aes-256-cbc -d -a -salt -pass pass:secret -in test.txt.locked -out test.txt
 st=$?
 if (( st == 0 )) ; then
     Pass $tid "openssl-dec"
