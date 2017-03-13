@@ -27,6 +27,8 @@ You can specify `-j` to increase or decrease the number of threads. This program
 limitations of the Global Interpreter Lock (GIL) so your multi-threading performance improvement may not be what you
 expect and may be different between Python 2.7 and 3.x.
 
+You can specify `-c` to generate files that are compatible with `openssl`.
+
 The program is re-entrant which means that you can run lock a single file multiple times with different passwords. 
 Each new password will append an additional `.locked` extension. If you don't like the `.locked` extension, you can change it
 using the `-s` (suffix) option.
@@ -159,6 +161,25 @@ $ cat -n file.txt
      6	pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
      7	culpa qui officia deserunt mollit anim id est laborum.
 ```
+### Openssl compatibility
+By default the files encrypted by lock_files.py are not compatible with openssl. However, if your encrypted files to be compatible or
+if you want lock_files.py to be able to unlock files that were decrypted by `openssl`, you can use compatibility mode (`-c`).
+
+The example below shows how to use lock_files.py encrypt a file in compatibility mode and then decrypt it using openssl.
+
+```bash
+$ lock_files.py -c -P secret -l file.txt
+$ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file.txt.locked -out file.txt
+```
+
+The example below shows how to use openssl to encrypt a file and then decrypt it using lock_files.py.
+
+```bash
+$ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file.txt -out file.txt.locked
+$ lock_files.py -c -P secret -u file.txt.locked
+```
+
+When `-c` is specified on the command line, all files encrypted or decrypted will be able to be processed by openssl.
 
 ## Download and Test
 Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
@@ -236,17 +257,41 @@ DESCRIPTION:
   program and then re-encrypt it when the program exits.
   
      $ # the unlock operation removes the .locked extension
-     $ lock_files -p ./password --unlock file1.txt.locked
+     $ lock_files.py -p ./password --unlock file1.txt.locked
      $ edit file1.txt
-     $ lock_files -p ./password file1.txt
+     $ lock_files.py -p ./password file1.txt
   
   The tool checks each file to make sure that it is writeable before
   processing. If any files is not writeable, the program reports an
-  error and exits unless you specify --cont in which case it
+  error and exits unless you specify --warn in which case it
   reports a warning that the file will be ignored and continues.
   
   If you want to change a file in place you can use --inplace mode.
   See the documentation for that option to get more information.
+  
+  If you want to encrypt and decrypt files so that they can be
+  processed using openssl, you must use compatibility mode (-c).
+  
+  Here is how you could encrypt a file using lock_files.py and
+  decrypt it using openssl.
+  
+     $ lock_files.py -P secret --lock file1.txt
+     $ ls file1*
+     file1.txt.locked
+     $ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file1.txt.locked -out file1.txt
+  
+  Here is how you could encrypt a file using openssl and then
+  decrypt it using lock_files.py.
+  
+     $ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file1.txt -out file1.txt.locked
+     $ ls file1*
+     file1.txt      file1.txt.locked
+     $ lock_files.py -c -W -P secret --unlock file1.txt.locked
+     $ ls file1*
+     file1.txt
+  
+  Note that you have to use the -W option to change errors to
+  warning because the file1.txt output file already exists.
 
 POSITIONAL ARGUMENTS:
   FILES                 files to process
@@ -254,12 +299,20 @@ POSITIONAL ARGUMENTS:
 OPTIONAL ARGUMENTS:
   -h, --help            Show this help message and exit.
                          
-  -c, --cont            Continue if a single file lock/unlock fails.
-                        Normally if the program tries to modify a
-                        fail and that modification fails, an error is
-                        reported and the programs stops. This option
-                        causes that event to be treated as a warning
-                        so the program continues.
+  -c, --openssl         Enable openssl compatibility.
+                        This will encrypt and decrypt in a manner
+                        that is completely compatible openssl.
+                        
+                        This option must be specified for both
+                        encrypt and decrypt operations.
+                        
+                        These two decrypt commands are equivalent.
+                           $ openssl enc -aes-256-cbc -d -a -pass pass:PASSWORD -in FILE -o FILE.locked
+                           $ lock_files.py -P PASSWORD -l FILE
+                        
+                        These two decrypt commands are equivalent.
+                           $ openssl enc -aes-256-cbc -e -a -pass pass:PASSWORD -in FILE.locked -o FILE
+                           $ lock_files.py -P PASSWORD -u FILE
                          
   -d, --decrypt         Unlock/decrypt files.
                         This option is deprecated.
@@ -294,14 +347,14 @@ OPTIONAL ARGUMENTS:
                         is appended unless the --suffix option is
                         specified.
                          
+  -n, --no-recurse      Do not automatically recurse into
+                        subdirectories.
+                         
   -o, --overwrite       Overwrite files that already exist.
                         This can be used in conjunction disable file
                         existence checks.
                         
                         It is used by the --inplace mode.
-                         
-  -n, --no-recurse      Do not automatically recurse into
-                        subdirectories.
                          
   -p PASSWORD_FILE, --password-file PASSWORD_FILE
                         file that contains the password.
@@ -340,6 +393,13 @@ OPTIONAL ARGUMENTS:
                         are inserted.
                         
                         Default: 72
+  -W, --warn            Warn if a single file lock/unlock fails.
+                        Normally if the program tries to modify a
+                        fail and that modification fails, an error is
+                        reported and the programs stops. This option
+                        causes that event to be treated as a warning
+                        so the program continues.
+                         
 
 EXAMPLES:
    # Example 1: help
@@ -383,6 +443,15 @@ EXAMPLES:
    $ chmod 0600 pass.txt
    $ lock_files.py -p pass.txt -l file.txt
    $ lock_files.py -p pass.txt -u file.txt.locked
+
+   # Example 7: encrypt and decrypt in an openssl compatible manner
+   #            by specifying the compatibility (-c) option.
+   $ echo 'secret' >pass.txt
+   $ chmod 0600 pass.txt
+   $ lock_files.py -p pass.txt -c -l file.txt
+   $ # Dump the locked password file contents, then decrypt it.
+   $ openssl enc -aes-256-cbc -d -a -pass file:pass.txt -in file.txt.locked
+   $ lock_files.py -p pass.txt -c -u file.txt.locked
 
 COPYRIGHT:
    Copyright (c) 2015 Joe Linoff, all rights reserved
