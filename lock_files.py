@@ -67,12 +67,12 @@ decrypt it using openssl.
    $ lock_files.py -P secret --lock file1.txt
    $ ls file1*
    file1.txt.locked
-   $ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file1.txt.locked -out file1.txt
+   $ openssl enc -aes-256-cbc -d -a -salt -pass pass:secret -in file1.txt.locked -out file1.txt
 
 Here is how you could encrypt a file using openssl and then
 decrypt it using lock_files.py.
 
-   $ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file1.txt -out file1.txt.locked
+   $ openssl enc -aes-256-cbc -e -a -salt -pass pass:secret -in file1.txt -out file1.txt.locked
    $ ls file1*
    file1.txt      file1.txt.locked
    $ lock_files.py -c -W -P secret --unlock file1.txt.locked
@@ -113,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.7'
+VERSION = '1.0.8'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -160,7 +160,7 @@ class AESCipher:
 
             $ cat plaintext
             <plaintext>
-            $ openssl enc -e -aes-256-cbc -base64 -salt -pass pass:<password> -in plaintext
+            $ openssl enc -aes-256-cbc -e -a -salt -pass pass:<password> -in plaintext
 
         @param password  The password.
         @param plaintext The plaintext to encrypt.
@@ -199,7 +199,7 @@ class AESCipher:
 
             $ cat ciphertext
             <ciphertext>
-            $ egrep -v '^#|^$' | openssl enc -d -aes-256-cbc -base64 -salt -pass pass:<password> -in ciphertext
+            $ egrep -v '^#|^$' | openssl enc -aes-256-cbc -d -a -salt -pass pass:<password> -in ciphertext
 
         @param password   The password.
         @param ciphertext The ciphertext to decrypt.
@@ -765,7 +765,7 @@ def getopts():
    $ chmod 0600 pass.txt
    $ {0} -p pass.txt -c -l file.txt
    $ # Dump the locked password file contents, then decrypt it.
-   $ openssl enc -aes-256-cbc -d -a -pass file:pass.txt -in file.txt.locked
+   $ openssl enc -aes-256-cbc -d -a -salt -pass file:pass.txt -in file.txt.locked
    $ {0} -p pass.txt -c -u file.txt.locked
 
 COPYRIGHT:
@@ -795,11 +795,11 @@ This option must be specified for both
 encrypt and decrypt operations.
 
 These two decrypt commands are equivalent.
-   $ openssl enc -aes-256-cbc -d -a -pass pass:PASSWORD -in FILE -o FILE.locked
+   $ openssl enc -aes-256-cbc -d -a -salt -pass pass:PASSWORD -in FILE -o FILE.locked
    $ {0} -P PASSWORD -l FILE
 
 These two decrypt commands are equivalent.
-   $ openssl enc -aes-256-cbc -e -a -pass pass:PASSWORD -in FILE.locked -o FILE
+   $ openssl enc -aes-256-cbc -e -a -salt -pass pass:PASSWORD -in FILE.locked -o FILE
    $ {0} -P PASSWORD -u FILE
  '''.format(base))
 
