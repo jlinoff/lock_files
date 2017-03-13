@@ -572,11 +572,11 @@ fi
 Runcmd tree tmp
 Runcmd rm -rf tmp
 
-# test continue --cont, -c
+# test continue with warning: -W, --warn
 Runcmd cp file1.txt test1.txt
 Runcmd cp file2.txt test2.txt
 tid=${LINENO}
-Runcmd $Prog -P secret -v -v --lock -c test1.txt testXXX.txt test2.txt
+Runcmd $Prog -P secret -v -v --lock -W test1.txt testXXX.txt test2.txt
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "lock-run"
@@ -599,7 +599,7 @@ else
 fi
 
 tid=${LINENO}
-Runcmd $Prog -P secret -v -v --unlock -c test1.txt.locked testXXX.txt.locked test2.txt.locked
+Runcmd $Prog -P secret -v -v --unlock -W test1.txt.locked testXXX.txt.locked test2.txt.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -640,7 +640,7 @@ else
 fi
 
 tid=${LINENO}
-Runcmd $Prog -P secret -v -v --unlock -c test1.txt.locked.locked
+Runcmd $Prog -P secret -v -v --unlock -W test1.txt.locked.locked
 st=$?
 if (( $st == 0 )) ; then
     Pass $tid "unlock-run"
@@ -755,6 +755,66 @@ fi
 
 Runcmd wc test1.txt
 Runcmd sum test1.txt
+
+# Test openssl compatibility.
+info 'test openssl encrypt, lock_files decrypt'
+tid=${LINENO}
+Runcmd rm -f test.txt test.txt.locked
+Runcmd cp file1.txt test.txt
+Runcmd openssl enc -aes-256-cbc -e -a -pass pass:secret -in test.txt -out test.txt.locked
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "openssl-enc"
+else
+    Fail $tid "openssl-enc"
+fi
+
+tid=${LINENO}
+Runcmd $Prog -c -W -P secret -u test.txt.locked
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "lock_files-dec"
+else
+    Fail $tid "lock_files-dec"
+fi
+
+tid=${LINENO}
+Runcmd diff file1.txt test.txt
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "diff"
+else
+    Fail $tid "diff"
+fi
+
+info 'test lock_files encrypt, openssl decrypt'
+Runcmd rm -f test.txt test.txt.locked
+Runcmd cp file1.txt test.txt
+tid=${LINENO}
+Runcmd $Prog -c -W -P secret -l test.txt
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "lock_files-enc"
+else
+    Fail $tid "lock_files-enc"
+fi
+
+Runcmd openssl enc -aes-256-cbc -d -a -pass pass:secret -in test.txt.locked -out test.txt
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "openssl-dec"
+else
+    Fail $tid "openssl-dec"
+fi
+
+tid=${LINENO}
+Runcmd diff file1.txt test.txt
+st=$?
+if (( st == 0 )) ; then
+    Pass $tid "diff"
+else
+    Fail $tid "diff"
+fi
 
 # Test different lengths to verify padding.
 for(( i=1; i<=32; i++ )) ; do
