@@ -46,21 +46,46 @@ Here is how you would use this tool to decrypt a file, execute a
 program and then re-encrypt it when the program exits.
 
    $ # the unlock operation removes the .locked extension
-   $ lock_files -p ./password --unlock file1.txt.locked
+   $ lock_files.py -p ./password --unlock file1.txt.locked
    $ edit file1.txt
-   $ lock_files -p ./password file1.txt
+   $ lock_files.py -p ./password file1.txt
 
 The tool checks each file to make sure that it is writeable before
 processing. If any files is not writeable, the program reports an
-error and exits unless you specify --cont in which case it
+error and exits unless you specify --warn in which case it
 reports a warning that the file will be ignored and continues.
 
 If you want to change a file in place you can use --inplace mode.
 See the documentation for that option to get more information.
+
+If you want to encrypt and decrypt files so that they can be
+processed using openssl, you must use compatibility mode (-c).
+
+Here is how you could encrypt a file using lock_files.py and
+decrypt it using openssl.
+
+   $ lock_files.py -P secret --lock file1.txt
+   $ ls file1*
+   file1.txt.locked
+   $ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file1.txt.locked -out file1.txt
+
+Here is how you could encrypt a file using openssl and then
+decrypt it using lock_files.py.
+
+   $ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file1.txt -out file1.txt.locked
+   $ ls file1*
+   file1.txt      file1.txt.locked
+   $ lock_files.py -c -W -P secret --unlock file1.txt.locked
+   $ ls file1*
+   file1.txt
+
+Note that you have to use the -W option to change errors to
+warning because the file1.txt output file already exists.
 '''
 import argparse
 import base64
 import getpass
+import hashlib
 import inspect
 import os
 import subprocess
@@ -88,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.6'
+VERSION = '1.0.7'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -99,56 +124,187 @@ th_abort = False  # If true, abort all threads
 # Classes.
 #
 # ================================================================
-# CITATION: http://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
 class AESCipher:
     '''
-    Class that provides an object to encrypt or decrypt a string.
+    Class that provides an object to encrypt or decrypt a string
+    or a file.
+
+    CITATION: http://joelinoff.com/blog/?p=885
     '''
-    def __init__(self, key, block_size=32):
-        self.m_block_size = block_size
-        if len(key) >= self.m_block_size:
-            self.m_key = key[:self.m_block_size]
+    def __init__(self, openssl=False, digest='md5', keylen=32, ivlen=16):
+        '''
+        Initialize the object.
+
+        @param openssl  Operate identically to openssl.
+        @param width    Width of the MIME encoded lines for encryption.
+        @param digest   The digest used.
+        @param keylen   The key length (32-256, 16-128, 8-64).
+        @param ivlen    Length of the initialization vector.
+        '''
+        self.m_openssl = openssl
+        self.m_openssl_prefix = b'Salted__'  # Hardcoded into openssl.
+        self.m_openssl_prefix_len = len(self.m_openssl_prefix)
+        self.m_digest = getattr(__import__('hashlib', fromlist=[digest]), digest)
+        self.m_keylen = keylen
+        self.m_ivlen = ivlen
+        if keylen not in [8, 16, 32]:
+            err('invalid keylen {}, must be 8, 16 or 32'.format(keylen))
+        if openssl and ivlen != 16:
+            err('invalid ivlen size {}, for openssl compatibility it must be 16'.format(ivlen))
+
+    def encrypt(self, password, plaintext):
+        '''
+        Encrypt the plaintext using the password using an openssl
+        compatible encryption algorithm. It is the same as creating a file
+        with plaintext contents and running openssl like this:
+
+            $ cat plaintext
+            <plaintext>
+            $ openssl enc -e -aes-256-cbc -base64 -salt -pass pass:<password> -in plaintext
+
+        @param password  The password.
+        @param plaintext The plaintext to encrypt.
+        @param msgdgst   The message digest algorithm.
+        '''
+        if self.m_openssl:
+            salt = os.urandom(self.m_ivlen - len(self.m_openssl_prefix))
+            key, iv = self._get_key_and_iv(password, salt)
+            if key is None:
+                return None
+
+            # Encrypt
+            padded_plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            ciphertext = cipher.encrypt(padded_plaintext)
+
+            # Make openssl compatible.
+            # I first discovered this when I wrote the C++ Cipher class.
+            # CITATION: http://projects.joelinoff.com/cipher-1.1/doxydocs/html/
+            openssl_ciphertext = self.m_openssl_prefix + salt + ciphertext
+            ciphertext = base64.b64encode(openssl_ciphertext)
         else:
-            self.m_key = self._pad(key)
+            # No salt, no 'Salted__' prefix.
+            key = self._get_password_key(password)
+            plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
+            iv = Random.new().read(AES.block_size)
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            ciphertext = base64.b64encode(iv + cipher.encrypt(plaintext))
+        return ciphertext
 
-    def encrypt(self, raw):
-        raw = self._pad(raw)
-        iv = Random.new().read(AES.block_size)
-        cipher = AES.new(self.m_key, AES.MODE_CBC, iv)
-        return base64.b64encode(iv + cipher.encrypt(raw))
+    def decrypt(self, password, ciphertext):
+        '''
+        Decrypt the ciphertext using the password using an openssl
+        compatible decryption algorithm. It is the same as creating a file
+        with ciphertext contents and running openssl like this:
 
-    def decrypt(self, enc):
-        enc = base64.b64decode(enc)
-        iv = enc[:AES.block_size]
-        cipher = AES.new(self.m_key, AES.MODE_CBC, iv)
-        return self._unpad(cipher.decrypt(enc[AES.block_size:]))
+            $ cat ciphertext
+            <ciphertext>
+            $ egrep -v '^#|^$' | openssl enc -d -aes-256-cbc -base64 -salt -pass pass:<password> -in ciphertext
 
-    def _pad(self, s):
-        # pad to the boundary using a byte value that indicates
-        # the number of padded bytes to make it easy to unpad
-        # later.
-        num_bytes = self.m_block_size - (len(s) % self.m_block_size)
+        @param password   The password.
+        @param ciphertext The ciphertext to decrypt.
+        @returns the decrypted data.
+        '''
+        if self.m_openssl:
+            # Base64 decode
+            raw = base64.b64decode(ciphertext)
+            if raw[:self.m_openssl_prefix_len] != self.m_openssl_prefix:
+                err('bad header, cannot decrypt')
+            salt = raw[self.m_openssl_prefix_len:self.m_ivlen]  # get the salt
+
+            # Now create the key and iv.
+            key, iv = self._get_key_and_iv(password, salt)
+            if key is None:
+                return None
+
+            # The original ciphertext
+            ciphertext = raw[self.m_ivlen:]
+
+            # Decrypt
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            padded_plaintext = cipher.decrypt(ciphertext)
+            plaintext = self._pkcs7_unpad(padded_plaintext)
+        else:
+            key = self._get_password_key(password)
+            ciphertext = base64.b64decode(ciphertext)
+            iv = ciphertext[:AES.block_size]
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            plaintext = self._pkcs7_unpad(cipher.decrypt(ciphertext[AES.block_size:]))
+        return plaintext
+
+    def _get_password_key(self, password):
+        '''
+        Pad the password if necessary.
+
+        This is done by encrypt and decrypt.
+        '''
+        if len(password) >= self.m_keylen:
+            key = password[:self.m_keylen]
+        else:
+            key = self._pkcs7_pad(password, self.m_keylen)
+        return key
+
+    def _get_key_and_iv(self, password, salt):
+        '''
+        Derive the key and the IV from the given password and salt.
+
+        This is a niftier implementation than my direct transliteration of
+        the C++ code although I modified to support different digests.
+
+        @param password  The password to use as the seed.
+        @param salt      The salt.
+        '''
+        password = password.encode('utf-8', 'ignore')
+        try:
+            maxlen = self.m_keylen + self.m_ivlen
+            keyiv = self.m_digest(password + salt).digest()
+            tmp = [keyiv]
+            while len(tmp) < maxlen:
+                tmp.append(self.m_digest(tmp[-1] + password + salt).digest())
+                keyiv += tmp[-1]  # append the last byte
+            key = keyiv[:self.m_keylen]
+            iv = keyiv[self.m_keylen:self.m_keylen + self.m_ivlen]
+            return key, iv
+        except UnicodeDecodeError as exc:
+            err('failed to generate key and iv: {}'.format(exc))
+            return None, None
+
+    def _pkcs7_pad(self, text, size):
+        '''
+        PKCS#7 padding.
+
+        Pad to the boundary using a byte value that indicates
+        the number of padded bytes to make it easy to unpad
+        later.
+
+        @param text  The text to pad.
+        '''
+        num_bytes = size - (len(text) % size)
 
         # Works for python3 and python2.
-        if isinstance(s, str):
-            s += chr(num_bytes) * num_bytes
-        elif isinstance(s, bytes):
-            s += bytearray([num_bytes] * num_bytes)
+        if isinstance(text, str):
+            text += chr(num_bytes) * num_bytes
+        elif isinstance(text, bytes):
+            text += bytearray([num_bytes] * num_bytes)
         else:
             assert False
-        return s
+        return text
 
-    def _unpad(self, s):
-        # we padded with the number of characters to unpad.
-        # just get it and truncate the string.
-        # Works for python3 and python2.
-        if isinstance(s, str):
-            u = ord(s[-1])
-        elif isinstance(s, bytes):
-            u = s[-1]
+    def _pkcs7_unpad(self, padded):
+        '''
+        PKCS#7 unpadding.
+
+        We padded with the number of characters to unpad.
+        Just get it and truncate the string.
+        Works for python3 and python2.
+        '''
+        if isinstance(padded, str):
+            unpadded_len = ord(padded[-1])
+        elif isinstance(padded, bytes):
+            unpadded_len = padded[-1]
         else:
             assert False
-        return s[:-u]
+        return padded[:-unpadded_len]
 
 
 # ================================================================
@@ -289,12 +445,12 @@ def wait_for_threads():
 # Program specific functions.
 #
 # ================================================================
-def get_cont_fct(opts):
+def get_err_fct(opts):
     '''
     Get the message function: error or warning depending on
-    the --cont setting.
+    the --warn setting.
     '''
-    if opts.cont is True:
+    if opts.warn is True:
         return warn
     return err
 
@@ -317,7 +473,7 @@ def check_existence(opts, path):
     If -o or --overwrite is specified, we don't care if it exists.
     '''
     if opts.overwrite is False and os.path.exists(path):
-        get_cont_fct(opts)('file exists, cannot continue: {}'.format(path))
+        get_err_fct(opts)('file exists, cannot continue: {}'.format(path))
 
 
 def read_file(opts, path, stats):
@@ -330,7 +486,7 @@ def read_file(opts, path, stats):
             stat_inc(stats, 'read', len(data))
             return data
     except IOError as exc:
-        get_cont_fct(opts)('failed to read file "{}": {}'.format(path, exc))
+        get_err_fct(opts)('failed to read file "{}": {}'.format(path, exc))
         return None
 
 
@@ -350,7 +506,7 @@ def write_file(opts, path, content, stats, width=0):
                     i += width
             stat_inc(stats, 'written', len(content))
     except IOError as exc:
-        get_cont_fct(opts)('failed to write file "{}": {}'.format(path, exc))
+        get_err_fct(opts)('failed to write file "{}": {}'.format(path, exc))
         return False
     return True
 
@@ -365,14 +521,13 @@ def lock_file(opts, password, path, stats):
     content = read_file(opts, path, stats)
     if content is not None:
         try:
-            aes = AESCipher(password)
-            data = aes.encrypt(content)
+            data = AESCipher(openssl=opts.openssl).encrypt(password, content)
             if write_file(opts, out, data, stats, width=opts.wll) is True and th_abort is False:
                 if out != path:
                     os.remove(path)  # remove the input
                 stat_inc(stats, 'locked')
         except ValueError as exc:
-            get_cont_fct(opts)('lock/encrypt operation failed for "{}": {}'.format(path, exc))
+            get_err_fct(opts)('lock/encrypt operation failed for "{}": {}'.format(path, exc))
 
 
 def unlock_file(opts, password, path, stats):
@@ -389,14 +544,13 @@ def unlock_file(opts, password, path, stats):
         content = read_file(opts, path, stats)
         if content is not None and th_abort is False:
             try:
-                aes = AESCipher(password)
-                data = aes.decrypt(content)
+                data = AESCipher(openssl=opts.openssl).decrypt(password, content)
                 if write_file(opts, out, data, stats) is True:
                     if out != path:
                         os.remove(path)  # remove the input
                     stats['unlocked'] += 1
             except ValueError as exc:
-                get_cont_fct(opts)('unlock/decrypt operation failed for "{}": {}'.format(path, exc))
+                get_err_fct(opts)('unlock/decrypt operation failed for "{}": {}'.format(path, exc))
     else:
         infov2(opts, 'skip "{}"'.format(path))
         stats['skipped'] += 1
@@ -605,6 +759,15 @@ def getopts():
    $ {0} -p pass.txt -l file.txt
    $ {0} -p pass.txt -u file.txt.locked
 
+   # Example 7: encrypt and decrypt in an openssl compatible manner
+   #            by specifying the compatibility (-c) option.
+   $ echo 'secret' >pass.txt
+   $ chmod 0600 pass.txt
+   $ {0} -p pass.txt -c -l file.txt
+   $ # Dump the locked password file contents, then decrypt it.
+   $ openssl enc -aes-256-cbc -d -a -pass file:pass.txt -in file.txt.locked
+   $ {0} -p pass.txt -c -u file.txt.locked
+
 COPYRIGHT:
    Copyright (c) 2015 Joe Linoff, all rights reserved
 
@@ -622,17 +785,23 @@ PROJECT:
 
     group1 = parser.add_mutually_exclusive_group()
 
-    # Note that I cannot use --continue here because opts.continue
-    # would try to reference a python keyword 'continue' and fail.
-    parser.add_argument('-c', '--cont',
+    parser.add_argument('-c', '--openssl',
                         action='store_true',
-                        help='''Continue if a single file lock/unlock fails.
-Normally if the program tries to modify a
-fail and that modification fails, an error is
-reported and the programs stops. This option
-causes that event to be treated as a warning
-so the program continues.
- ''')
+                        help='''Enable openssl compatibility.
+This will encrypt and decrypt in a manner
+that is completely compatible openssl.
+
+This option must be specified for both
+encrypt and decrypt operations.
+
+These two decrypt commands are equivalent.
+   $ openssl enc -aes-256-cbc -d -a -pass pass:PASSWORD -in FILE -o FILE.locked
+   $ {0} -P PASSWORD -l FILE
+
+These two decrypt commands are equivalent.
+   $ openssl enc -aes-256-cbc -e -a -pass pass:PASSWORD -in FILE.locked -o FILE
+   $ {0} -P PASSWORD -u FILE
+ '''.format(base))
 
     parser.add_argument('-d', '--decrypt',
                         action='store_true',
@@ -685,6 +854,12 @@ is appended unless the --suffix option is
 specified.
  ''')
 
+    parser.add_argument('-n', '--no-recurse',
+                        action='store_true',
+                        help='''Do not automatically recurse into
+subdirectories.
+ ''')
+
     parser.add_argument('-o', '--overwrite',
                         action='store_true',
                         help='''Overwrite files that already exist.
@@ -692,12 +867,6 @@ This can be used in conjunction disable file
 existence checks.
 
 It is used by the --inplace mode.
- ''')
-
-    parser.add_argument('-n', '--no-recurse',
-                        action='store_true',
-                        help='''Do not automatically recurse into
-subdirectories.
  ''')
 
     group1.add_argument('-p', '--password-file',
@@ -765,6 +934,16 @@ are inserted.
 
 Default: %(default)s
 ''')
+
+    parser.add_argument('-W', '--warn',
+                        action='store_true',
+                        help='''Warn if a single file lock/unlock fails.
+Normally if the program tries to modify a
+fail and that modification fails, an error is
+reported and the programs stops. This option
+causes that event to be treated as a warning
+so the program continues.
+ ''')
 
     # Positional arguments at the end.
     parser.add_argument('FILES',
