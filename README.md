@@ -183,8 +183,8 @@ $ lock_files.py -c -P secret -u file.txt.locked
 
 When `-c` is specified on the command line, all files encrypted or decrypted will be able to be processed by openssl.
 
-> I want to re-emphasize that if you only want to encrypt/decrypt single files, use `openssl`, lock_files.py is only
-> mean to be used for groups of files.
+> I want to re-emphasize that if you only want to encrypt/decrypt a single file, use `openssl`, lock_files.py is only
+> meant to be used for groups of files.
 
 ## Download and Test
 Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
