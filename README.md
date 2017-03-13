@@ -170,13 +170,13 @@ The example below shows how to use lock_files.py encrypt a file in compatibility
 
 ```bash
 $ lock_files.py -c -P secret -l file.txt
-$ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file.txt.locked -out file.txt
+$ openssl enc -aes-256-cbc -d -a -salt -pass pass:secret -in file.txt.locked -out file.txt
 ```
 
 The example below shows how to use openssl to encrypt a file and then decrypt it using lock_files.py.
 
 ```bash
-$ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file.txt -out file.txt.locked
+$ openssl enc -aes-256-cbc -e -a -salt -pass pass:secret -in file.txt -out file.txt.locked
 $ lock_files.py -c -P secret -u file.txt.locked
 ```
 
@@ -279,12 +279,12 @@ DESCRIPTION:
      $ lock_files.py -P secret --lock file1.txt
      $ ls file1*
      file1.txt.locked
-     $ openssl enc -aes-256-cbc -d -a -pass pass:secret -in file1.txt.locked -out file1.txt
+     $ openssl enc -aes-256-cbc -d -a -salt -pass pass:secret -in file1.txt.locked -out file1.txt
   
   Here is how you could encrypt a file using openssl and then
   decrypt it using lock_files.py.
   
-     $ openssl enc -aes-256-cbc -e -a -pass pass:secret -in file1.txt -out file1.txt.locked
+     $ openssl enc -aes-256-cbc -e -a -salt -pass pass:secret -in file1.txt -out file1.txt.locked
      $ ls file1*
      file1.txt      file1.txt.locked
      $ lock_files.py -c -W -P secret --unlock file1.txt.locked
@@ -308,11 +308,11 @@ OPTIONAL ARGUMENTS:
                         encrypt and decrypt operations.
                         
                         These two decrypt commands are equivalent.
-                           $ openssl enc -aes-256-cbc -d -a -pass pass:PASSWORD -in FILE -o FILE.locked
+                           $ openssl enc -aes-256-cbc -d -a -salt -pass pass:PASSWORD -in FILE -o FILE.locked
                            $ lock_files.py -P PASSWORD -l FILE
                         
                         These two decrypt commands are equivalent.
-                           $ openssl enc -aes-256-cbc -e -a -pass pass:PASSWORD -in FILE.locked -o FILE
+                           $ openssl enc -aes-256-cbc -e -a -salt -pass pass:PASSWORD -in FILE.locked -o FILE
                            $ lock_files.py -P PASSWORD -u FILE
                          
   -d, --decrypt         Unlock/decrypt files.
@@ -451,7 +451,7 @@ EXAMPLES:
    $ chmod 0600 pass.txt
    $ lock_files.py -p pass.txt -c -l file.txt
    $ # Dump the locked password file contents, then decrypt it.
-   $ openssl enc -aes-256-cbc -d -a -pass file:pass.txt -in file.txt.locked
+   $ openssl enc -aes-256-cbc -d -a -salt -pass file:pass.txt -in file.txt.locked
    $ lock_files.py -p pass.txt -c -u file.txt.locked
 
 COPYRIGHT:
