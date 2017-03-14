@@ -113,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.9'
+VERSION = '1.0.10'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -573,7 +573,7 @@ def process_dir(opts, password, path, stats):
     Process a directory, we always start at the top level.
     '''
     stats['dirs'] += 1
-    if opts.no_recurse is False:
+    if opts.recurse is True:
         # Recurse to get everything.
         for root, subdirs, subfiles in os.walk(path):
             for subfile in sorted(subfiles, key=str.lower):
@@ -605,7 +605,7 @@ def process(opts, password, entry, stats):
 
     If it is a file, then operate on it.
 
-    If it is a directory, recurse unless --no-recurse was specified.
+    If it is a directory, recurse if --recurse was specified.
     '''
     if th_abort is False:
         if os.path.isfile(entry):
@@ -854,12 +854,6 @@ is appended unless the --suffix option is
 specified.
  ''')
 
-    parser.add_argument('-n', '--no-recurse',
-                        action='store_true',
-                        help='''Do not automatically recurse into
-subdirectories.
- ''')
-
     parser.add_argument('-o', '--overwrite',
                         action='store_true',
                         help='''Overwrite files that already exist.
@@ -883,6 +877,11 @@ password.
                         help='''Specify the password on the command line.
 This is not secure because it is visible in
 the command history.
+ ''')
+
+    parser.add_argument('-r', '--recurse',
+                        action='store_true',
+                        help='''Recurse into subdirectories.
  ''')
 
     parser.add_argument('-s', '--suffix',
