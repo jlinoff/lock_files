@@ -27,6 +27,8 @@ You can specify `-j` to increase or decrease the number of threads. This program
 limitations of the Global Interpreter Lock (GIL) so your multi-threading performance improvement may not be what you
 expect and may be different between Python 2.7 and 3.x.
 
+You can specify `-r` to recurse into subdirectories.
+
 You can specify `-c` to generate files that are compatible with `openssl`.
 
 The program is re-entrant which means that you can run lock a single file multiple times with different passwords. 
