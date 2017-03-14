@@ -164,12 +164,12 @@ Runcmd tree tmp
 Test 'tmp-setup' '[' -e 'tmp/file1.txt' ']'
 Test 'tmp-setup' '[' -e 'tmp/tmp/file1.txt' ']'
 Test 'tmp-setup' '[' -e 'tmp/tmp/file2.txt' ']'
-Test 'lock-run' $Prog -P secret -v -v tmp
+Test 'lock-run' $Prog -P secret -v -v -r -l tmp
 Test 'tmp-setup' '[' -e 'tmp/file1.txt.locked' ']'
 Test 'tmp-setup' '[' -e 'tmp/tmp/file1.txt.locked' ']'
 Test 'tmp-setup' '[' -e 'tmp/tmp/file2.txt.locked' ']'
 Runcmd tree tmp
-Test 'unlock-run' $Prog -P secret -v -v --unlock tmp
+Test 'unlock-run' $Prog -P secret -v -v -r -u tmp
 Test 'tmp-final' '[' -e 'tmp/file1.txt' ']'
 Test 'tmp-final' '[' -e 'tmp/tmp/file1.txt' ']'
 Test 'tmp-final' '[' -e 'tmp/tmp/file2.txt' ']'
@@ -179,7 +179,7 @@ Test 'diff-test' diff tmp/tmp/file2.txt file2.txt
 Runcmd tree tmp
 Runcmd rm -rf tmp
 
-# Test directories - no recurse.
+# Test directories - recurse.
 # setup
 Runcmd rm -rf tmp
 Runcmd mkdir tmp
@@ -190,7 +190,7 @@ Runcmd tree tmp
 
 Test 'tmp-setup' '[' -e 'tmp/file1.txt' ']'
 Test 'tmp-setup' '[' -e 'tmp/tmp/file1.txt' ']'
-Test 'lock-run' $Prog -P secret -v -v -n tmp
+Test 'lock-run' $Prog -P secret -v -v tmp
 Test 'tmp-setup' '[' -e 'tmp/file1.txt.locked' ']'
 Test 'tmp-setup' '[' '!' -e 'tmp/tmp/file1.txt.locked' ']'
 Runcmd tree tmp
