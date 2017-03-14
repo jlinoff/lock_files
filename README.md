@@ -352,9 +352,6 @@ OPTIONAL ARGUMENTS:
                         is appended unless the --suffix option is
                         specified.
                          
-  -n, --no-recurse      Do not automatically recurse into
-                        subdirectories.
-                         
   -o, --overwrite       Overwrite files that already exist.
                         This can be used in conjunction disable file
                         existence checks.
@@ -370,6 +367,8 @@ OPTIONAL ARGUMENTS:
                         Specify the password on the command line.
                         This is not secure because it is visible in
                         the command history.
+                         
+  -r, --recurse         Recurse into subdirectories.
                          
   -s EXTENSION, --suffix EXTENSION
                         Specify the extension used for locked files.
