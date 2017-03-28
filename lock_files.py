@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 '''
 Encrypt and decrypt files using AES encryption and a common
 password. You can use it lock files before they are uploaded to
@@ -38,7 +39,7 @@ You can now use the password file like this to lock and unlock a file.
    $ lock_files.py -p password-file file1.txt
    $ lock_files.py -p password-file --unlock file1.txt.locked
 
-In decrypt mode the tool walks through the specified files and
+In decrypt mode, the tool walks through the specified files and
 directories looking for files with the .locked extension and unlocks
 (decrypts) them.
 
@@ -94,12 +95,11 @@ import threading
 
 from threading import Thread, Lock, Semaphore
 
-# You may get into trouble with versions of python earlier than 2.7.
 try:
-    from Crypto import Random
-    from Crypto.Cipher import AES
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.backends import default_backend
 except ImportError as exc:
-    print('ERROR: Import failed, you may need to run "pip install pycrypto".\n{:>7}{}'.format('', exc))
+    print('ERROR: Import failed, you may need to run "pip install cryptography".\n{:>7}{}'.format('', exc))
     sys.exit(1)
 
 try:
@@ -113,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.0.10'
+VERSION = '1.1.0'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -148,57 +148,65 @@ class AESCipher:
         self.m_keylen = keylen
         self.m_ivlen = ivlen
         if keylen not in [8, 16, 32]:
-            err('invalid keylen {}, must be 8, 16 or 32'.format(keylen))
+            err('invalid keylen {}, must be 16, 24 or 32'.format(keylen))
         if openssl and ivlen != 16:
             err('invalid ivlen size {}, for openssl compatibility it must be 16'.format(ivlen))
 
     def encrypt(self, password, plaintext):
         '''
-        Encrypt the plaintext using the password using an openssl
-        compatible encryption algorithm. It is the same as creating a file
-        with plaintext contents and running openssl like this:
+        Encrypt the plaintext using the password, optionally using an
+        openssl compatible encryption algorithm.
 
-            $ cat plaintext
-            <plaintext>
+        If it is run in openssl compatibility mode, it is the same as
+        running openssl like this:
+
             $ openssl enc -aes-256-cbc -e -a -salt -pass pass:<password> -in plaintext
 
         @param password  The password.
         @param plaintext The plaintext to encrypt.
         @param msgdgst   The message digest algorithm.
         '''
+        # Setup key and IV for both modes.
         if self.m_openssl:
             salt = os.urandom(self.m_ivlen - len(self.m_openssl_prefix))
             key, iv = self._get_key_and_iv(password, salt)
-            if key is None:
+            if key is None or iv is None:
                 return None
+        else:
+            # No 'Salted__' prefix.
+            key = self._get_password_key(password)
+            iv = os.urandom(self.m_ivlen)  # IV is the same as block size for CBC mode
 
-            # Encrypt
-            padded_plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
-            cipher = AES.new(key, AES.MODE_CBC, iv)
-            ciphertext = cipher.encrypt(padded_plaintext)
+        # Key
+        key = self._encode(key)
 
+        # Encrypt
+        padded_plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
+        backend = default_backend()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=backend)
+        encryptor = cipher.encryptor()
+        ciphertext_binary = encryptor.update(padded_plaintext) + encryptor.finalize()
+
+        # Finalize
+        if self.m_openssl:
             # Make openssl compatible.
             # I first discovered this when I wrote the C++ Cipher class.
             # CITATION: http://projects.joelinoff.com/cipher-1.1/doxydocs/html/
-            openssl_ciphertext = self.m_openssl_prefix + salt + ciphertext
-            ciphertext = base64.b64encode(openssl_ciphertext)
+            openssl_compatible = self.m_openssl_prefix + salt + ciphertext_binary
+            ciphertext = base64.b64encode(openssl_compatible)
         else:
-            # No salt, no 'Salted__' prefix.
-            key = self._get_password_key(password)
-            plaintext = self._pkcs7_pad(plaintext, self.m_ivlen)
-            iv = Random.new().read(AES.block_size)
-            cipher = AES.new(key, AES.MODE_CBC, iv)
-            ciphertext = base64.b64encode(iv + cipher.encrypt(plaintext))
+            ciphertext = base64.b64encode(iv + ciphertext_binary)
+
         return ciphertext
 
     def decrypt(self, password, ciphertext):
         '''
-        Decrypt the ciphertext using the password using an openssl
-        compatible decryption algorithm. It is the same as creating a file
-        with ciphertext contents and running openssl like this:
+        Decrypt the ciphertext using the password, optionally using an
+        openssl compatible decryption algorithm.
 
-            $ cat ciphertext
-            <ciphertext>
+        If it was encrypted in openssl compatible mode, it is the same
+        as running the following openssl decryption command:
+
             $ egrep -v '^#|^$' | openssl enc -aes-256-cbc -d -a -salt -pass pass:<password> -in ciphertext
 
         @param password   The password.
@@ -207,36 +215,40 @@ class AESCipher:
         '''
         if self.m_openssl:
             # Base64 decode
-            raw = base64.b64decode(ciphertext)
-            if raw[:self.m_openssl_prefix_len] != self.m_openssl_prefix:
+            ciphertext_prefixed_binary = base64.b64decode(ciphertext)
+            if ciphertext_prefixed_binary[:self.m_openssl_prefix_len] != self.m_openssl_prefix:
                 err('bad header, cannot decrypt')
-            salt = raw[self.m_openssl_prefix_len:self.m_ivlen]  # get the salt
+            salt = ciphertext_prefixed_binary[self.m_openssl_prefix_len:self.m_ivlen]  # get the salt
 
             # Now create the key and iv.
             key, iv = self._get_key_and_iv(password, salt)
-            if key is None:
+            if key is None or iv is None:
                 return None
-
-            # The original ciphertext
-            ciphertext = raw[self.m_ivlen:]
-
-            # Decrypt
-            cipher = AES.new(key, AES.MODE_CBC, iv)
-            padded_plaintext = cipher.decrypt(ciphertext)
-            plaintext = self._pkcs7_unpad(padded_plaintext)
         else:
             key = self._get_password_key(password)
-            ciphertext = base64.b64decode(ciphertext)
-            iv = ciphertext[:AES.block_size]
-            cipher = AES.new(key, AES.MODE_CBC, iv)
-            plaintext = self._pkcs7_unpad(cipher.decrypt(ciphertext[AES.block_size:]))
+            ciphertext_prefixed_binary = base64.b64decode(ciphertext)
+            iv = ciphertext_prefixed_binary[:self.m_ivlen]  # IV is the same as block size for CBC mode
+
+        # Key
+        key = self._encode(key)
+
+        # Decrypt
+        ciphertext_binary = ciphertext_prefixed_binary[self.m_ivlen:]
+        backend = default_backend()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=backend)
+        decryptor = cipher.decryptor()
+        padded_plaintext  = decryptor.update(ciphertext_binary) + decryptor.finalize()
+        plaintext = self._pkcs7_unpad(padded_plaintext)
         return plaintext
 
     def _get_password_key(self, password):
         '''
         Pad the password if necessary.
 
-        This is done by encrypt and decrypt.
+        This is used by encrypt and decrypt.
+
+        Note that the password could be hashed here instead. This
+        approach is used to maintain backward compatibility.
         '''
         if len(password) >= self.m_keylen:
             key = password[:self.m_keylen]
@@ -248,14 +260,16 @@ class AESCipher:
         '''
         Derive the key and the IV from the given password and salt.
 
-        This is a niftier implementation than my direct transliteration of
-        the C++ code although I modified to support different digests.
+        This is a niftier implementation than my implementation in C++
+        because I modified it to support different digests.
 
         @param password  The password to use as the seed.
         @param salt      The salt.
         '''
-        password = password.encode('utf-8', 'ignore')
         try:
+            # Ignore is okay here because it will be symmetric for
+            # both encrypt and decrypt operations.
+            password = password.encode('utf-8', 'ignore')
             maxlen = self.m_keylen + self.m_ivlen
             keyiv = self.m_digest(password + salt).digest()
             tmp = [keyiv]
@@ -268,6 +282,17 @@ class AESCipher:
         except UnicodeDecodeError as exc:
             err('failed to generate key and iv: {}'.format(exc))
             return None, None
+
+    def _encode(self, val):
+        '''
+        Encode a string for Python 2/3 compatibility.
+        '''
+        if isinstance(val, str):
+            try:
+                val = val.encode('utf-8')
+            except UnicodeDecodeError:
+                pass  # python 2, don't care
+        return val
 
     def _pkcs7_pad(self, text, size):
         '''
@@ -296,7 +321,7 @@ class AESCipher:
 
         We padded with the number of characters to unpad.
         Just get it and truncate the string.
-        Works for python3 and python2.
+        Works for python 2/3.
         '''
         if isinstance(padded, str):
             unpadded_len = ord(padded[-1])
@@ -520,14 +545,11 @@ def lock_file(opts, password, path, stats):
     check_existence(opts, out)
     content = read_file(opts, path, stats)
     if content is not None:
-        try:
-            data = AESCipher(openssl=opts.openssl).encrypt(password, content)
-            if write_file(opts, out, data, stats, width=opts.wll) is True and th_abort is False:
-                if out != path:
-                    os.remove(path)  # remove the input
-                stat_inc(stats, 'locked')
-        except ValueError as exc:
-            get_err_fct(opts)('lock/encrypt operation failed for "{}": {}'.format(path, exc))
+        data = AESCipher(openssl=opts.openssl).encrypt(password, content)
+        if data is not None and write_file(opts, out, data, stats, width=opts.wll) is True and th_abort is False:
+            if out != path:
+                os.remove(path)  # remove the input
+            stat_inc(stats, 'locked')
 
 
 def unlock_file(opts, password, path, stats):
@@ -831,11 +853,11 @@ write fails. This allows you to duplicate the
 behavior of the previous version.
  ''')
 
-    nc = get_num_cores()
+    #nc = get_num_cores()
     parser.add_argument('-j', '--jobs',
                         action='store',
                         type=int,
-                        default=nc,
+                        default=1,
                         metavar=('NUM_THREADS'),
                         help='''Specify the maximum number of active threads.
 
