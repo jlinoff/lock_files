@@ -5,17 +5,18 @@ define hdr
 	@echo "# ========================================================================"
 endef
 
-all: p27 p36
+define runit
+	$(call hdr,$@)
+	@rm -f $@.log
+	((time ./test.sh '$@ ../lock_files.py' 2>&1) 2>&1) | tee -a $@.log | egrep '^test:|^FAILED|^PASSED'
+endef
+
+all: clean python2.7 python3.6
 
 clean:
+	$(call hdr,$@)
 	rm -rf *~ *log *locked test.txt* tmp
 
-p27:
-	$(call hdr,"Python 2.7")
-	@rm -f $@.log
-	./test.sh 'python2.7 ../lock_files.py' 2>&1 | tee -a $@.log | egrep '^test:|^FAILED|^PASSED'
-
-p36:
-	$(call hdr,"Python 2.7")
-	@rm -f $@.log
-	./test.sh 'python3.6 ../lock_files.py' 2>&1 | tee -a $@.log | egrep '^test:|^FAILED|^PASSED'
+python2.7: ; $(call runit,$@)
+python3.5: ; $(call runit,$@)
+python3.6: ; $(call runit,$@)
