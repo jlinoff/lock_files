@@ -44,7 +44,7 @@ function Test() {
         Done
     else
         (( Passed++ ))
-        printf "test:%s:%03d:passed %s\n" $Tid "$LineNum" "$Memo"
+        printf "test:%s:%s:passed %s\n" $Tid "$LineNum" "$Memo"
     fi
 }
 
