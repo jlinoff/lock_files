@@ -113,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -272,10 +272,10 @@ class AESCipher:
             password = password.encode('utf-8', 'ignore')
             maxlen = self.m_keylen + self.m_ivlen
             keyiv = self.m_digest(password + salt).digest()
-            tmp = [keyiv]
-            while len(tmp) < maxlen:
-                tmp.append(self.m_digest(tmp[-1] + password + salt).digest())
-                keyiv += tmp[-1]  # append the last byte
+            digest = keyiv
+            while len(keyiv) < maxlen:
+                digest = self.m_digest(digest + password + salt).digest()
+                keyiv += digest  # append the last 16 bytes
             key = keyiv[:self.m_keylen]
             iv = keyiv[self.m_keylen:self.m_keylen + self.m_ivlen]
             return key, iv
