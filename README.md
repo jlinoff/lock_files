@@ -21,7 +21,7 @@ The tool checks each file to make sure that it is writeable before processing. I
 it means that they cannot be changed so the program aborts unless you specified the continue `-c` option. Files up until that point
 are locked but they can easily be unlocked.
 
-You can use the `-v -v` option to see details about each file being processed.
+You can use the `-v -v` or `-vv` option to see details about each file being processed.
 
 You can specify `-j` to increase or decrease the number of threads. This program, like all Python programs, is subject to the
 limitations of the Global Interpreter Lock (GIL) so your multi-threading performance improvement may not be what you
