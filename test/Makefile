@@ -11,7 +11,7 @@ define runit
 	((time ./test.sh '$@ ../lock_files.py' 2>&1) 2>&1) | tee -a $@.log | egrep '^test:|^FAILED|^PASSED'
 endef
 
-all: clean python2.7 python3.6
+all: clean python2.7 python3
 
 clean:
 	$(call hdr,$@)
@@ -20,3 +20,6 @@ clean:
 python2.7: ; $(call runit,$@)
 python3.5: ; $(call runit,$@)
 python3.6: ; $(call runit,$@)
+python3.7: ; $(call runit,$@)
+python3: ; $(call runit,$@)
+python: ; $(call runit,$@)

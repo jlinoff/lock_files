@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 '''
 Encrypt and decrypt files using AES encryption and a common
-password. You can use it lock files before they are uploaded to
+password. You can use it to lock files before they are uploaded to
 storage services like DropBox or Google Drive.
 
 The password can be stored in a safe file, specified on the command
@@ -113,7 +113,7 @@ except ImportError:
 # Module scope variables.
 #
 # ================================================================
-VERSION = '1.1.1'
+VERSION = '1.1.2'
 th_mutex = Lock()  # mutex for thread IO
 th_semaphore = None  # semapthore to limit max active threads
 th_abort = False  # If true, abort all threads
@@ -148,7 +148,7 @@ class AESCipher:
         self.m_keylen = keylen
         self.m_ivlen = ivlen
         if keylen not in [8, 16, 32]:
-            err('invalid keylen {}, must be 16, 24 or 32'.format(keylen))
+            err('invalid keylen {}, must be 8, 16 or 32'.format(keylen))
         if openssl and ivlen != 16:
             err('invalid ivlen size {}, for openssl compatibility it must be 16'.format(ivlen))
 

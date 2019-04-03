@@ -2,38 +2,56 @@ lock_files
 ==========
 [![Releases](https://img.shields.io/github/release/jlinoff/lock_files.svg?style=flat)](https://github.com/jlinoff/lock_file/releases)
 
-This is a python command line tool to lock (encrypt) or unlock (decrypt) multiple files at a time using AES
-encryption and a common password. This version works in python2 and python3 and can be compatible with `openssl`.
+This is a python command line tool to lock (encrypt) or unlock
+(decrypt) multiple files using the Advanced Encryption Standard (AES)
+algorithm and a common password. This version works in python2 and
+python3 and can be compatible with `openssl`.
 
 ## Overview
-You can use it to lock files before they are uploaded to storage services like DropBox or Google Drive.
+You can use it to lock files before they are uploaded to storage
+services like DropBox or Google Drive.
 
-The files are locked/encrypted using AES-CBC mode from the pycrypto package (`import Crypto`) so the source is useful for understanding
-how to use this package. The encrypted data is encoded in base64 and broken into 72 character lines so that the output is ASCII with
-no very long lines. That makes it convenient for copying. You can change the line length using the `-w` option.
+The files are locked/encrypted using AES-CBC mode from the pycrypto
+package (`import Crypto`) so the source is useful for understanding
+how to use this package. The encrypted data is encoded in base64 and
+broken into 72 character lines so that the output is ASCII with no
+very long lines. That makes it convenient for copying. You can change
+the line length using the `-w` option.
 
-To encrypt files you need to specify a password. The password can be stored in a safe file (`-p`), specified on the command line in plaintext (`-P`) or it can be manually entered each time the tool is run from a password prompt.
+To encrypt files you need to specify a password. The password can be
+stored in a safe file (`-p`), specified on the command line in
+plaintext (`-P`) or it can be manually entered each time the tool is
+run from a password prompt.
 
-In the examples below, `-P` is used to specify a password on the command line in plaintext. This is only for convenience. Normally
-specifying a plaintext password is a bad idea for any production work because it will show up in the shell history.
+In the examples below, `-P` is used to specify a password on the
+command line in plaintext. This is only for convenience during
+testing. Normally specifying a plaintext password is a bad idea for
+any production work because it will show up in the shell history.
 
-The tool checks each file to make sure that it is writeable before processing. If any files are not writeable,
-it means that they cannot be changed so the program aborts unless you specified the continue `-c` option. Files up until that point
-are locked but they can easily be unlocked.
+The tool checks each file to make sure that it is writeable before
+processing. If any files are not writeable, it means that they cannot
+be changed so the program aborts unless you specified the continue
+`-c` option. Files up until that point are locked but they can easily
+be unlocked.
 
-You can use the `-v -v` or `-vv` option to see details about each file being processed.
+You can use the `-v -v` or `-vv` option to see details about each file
+being processed.
 
-You can specify `-j` to increase or decrease the number of threads. This program, like all Python programs, is subject to the
-limitations of the Global Interpreter Lock (GIL) so your multi-threading performance improvement may not be what you
-expect and may be different between Python 2.7 and 3.x.
+You can specify `-j` to increase or decrease the number of
+threads. This program, like all Python programs, is subject to the
+limitations of the Global Interpreter Lock (GIL) so your
+multi-threading performance improvement may not be what you expect and
+may be different between Python 2.7 and 3.x.
 
 You can specify `-r` to recurse into subdirectories.
 
-You can specify `-c` to generate files that are compatible with `openssl`.
+You can specify `-c` to generate files that are compatible with
+`openssl`.
 
-The program is re-entrant which means that you can run lock a single file multiple times with different passwords. 
-Each new password will append an additional `.locked` extension. If you don't like the `.locked` extension, you can change it
-using the `-s` (suffix) option.
+The program is re-entrant which means that you can run lock a single
+file multiple times with different passwords.  Each new password will
+append an additional `.locked` extension. If you don't like the
+`.locked` extension, you can change it using the `-s` (suffix) option.
 
 ### Simple Lock/Unlock
 Lets start with the simplest case, locking and unlocking a simple file using the password `secret`. The file is `file.txt`.
@@ -67,12 +85,15 @@ $ ls file.txt*
 file.txt
 ```
 
-From this example you can see that the input file is encrypted/locked and is stored in `file.txt.locked`. It is then decrypted/unlocked
-back to the original file `file.txt`. This is the normal mode of operation. 
+From this example you can see that the input file is encrypted/locked
+and is stored in `file.txt.locked`. It is then decrypted/unlocked back
+to the original file `file.txt`. This is the normal mode of operation.
 
-There is another mode called _in place_ that does away with the `.locked` extgension. It is explained and demonstrated a bit later
-but before talking about that in detail, it is important to note that the above example can be done just as easily using a common
-tool like `openssl` as follows.
+There is another mode called _in place_ that does away with the
+`.locked` extgension. It is explained and demonstrated a bit later but
+before talking about that in detail, it is important to note that the
+above example can be done just as easily using a common tool like
+`openssl` as follows.
 
 ```bash
 $ openssl aes-256-cbc -pass pass:secret -e -a -salt -in file.txt -out file.txt.lock
@@ -81,14 +102,16 @@ $ openssl aes-256-cbc -pass pass:secret -d -a -salt -in file.txt.lock -out file.
 
 So why use lock_files.py?
 
-For a single file _there is probably no good reason_ but because it handles multiple files and directories,
-you definitely want to consider using it for groups of files. 
+For a single file _there is probably no good reason_ but because it
+handles multiple files and directories, you definitely want to
+consider using it for groups of files.
 
 > I suppose that an argument could be made for a single file because
 > the command line is a bit simpler but it is definitely not a strong argument.
 
-Here is an example that shows how to lock groups of files. It locks all of the files in the secrets directory and all files with
-the `.confidential` extension:
+Here is an example that shows how to lock groups of files. It locks
+all of the files in the secrets directory and all files with the
+`.confidential` extension:
 
 ```bash
 $ lock_files.py -P secret -v -v --lock secrets *.confidential
@@ -103,31 +126,37 @@ $ lock_files.py -P secret -v -v --unlock secrets *.confidential.locked
 Note that for directories, you don't need to worry about the `.locked` extension.
 
 ### In Place Mode
-Now lets consider the _in place_ mode. The term _in place_ means not appending the `.locked` suffix to each file name that was locked.
-Here is how you would use this tool to lock/unlock files _in place_ using the above example with
-the `secret` directory and the files with the `.confidential` extensions.
+Now lets consider the _in place_ mode. The term _in place_ means not
+appending the `.locked` suffix to each file name that was locked.
+Here is how you would use this tool to lock/unlock files _in place_
+using the above example with the `secret` directory and the files with
+the `.confidential` extensions.
 
 ```bash
 $ lock_files.py -P secret -i --lock secrets *.confidential
 $ lock_files.py -P secret -i --unlock secrets *.confidential
 ```
 
-Note that you do _not_ have to use the `.locked` extension here because _it doesn't exist_. Each locked file has the same name as the
+Note that you do _not_ have to use the `.locked` extension here
+because _it doesn't exist_. Each locked file has the same name as the
 unlocked file.
 
 > Note that _in place_ is not secure because data will be lost if the disk fills up during a write operation
 > and it is not able to complete.
 
-Here is how you could use _in place_ mode to decrypt a file, execute a program and then re-encrypt it when the program exits.
+Here is how you could use _in place_ mode to decrypt a file, execute a
+program and then re-encrypt it when the program exits.
 
     $ lock_files.py -p ./password -i -u file1.txt
     $ edit file1.txt
     $ lock_files.py -p ./password -i -l file1.txt
 
-This approach can be used to make sure that source files are always locked/encrypted when not in use.
+This approach can be used to make sure that source files are always
+locked/encrypted when not in use.
 
 ### Password Files
-Here is how you could generate a password file and use it to lock and unlock files.
+Here is how you could generate a password file and use it to lock and
+unlock files.
 
 ```bash
 $ cat -n file.txt
@@ -165,52 +194,63 @@ $ cat -n file.txt
 ```
 
 ### Openssl compatibility
-By default the files encrypted by lock_files.py are not compatible with openssl. However, if you want your encrypted files to
-be decrypted by `openssl` or if you want lock_files.py to be able to unlock files that were decrypted by `openssl`, 
-you can use compatibility mode (`-c`).
+By default the files encrypted by lock_files.py are not compatible
+with openssl. However, if you want your encrypted files to be
+decrypted by `openssl` or if you want lock_files.py to be able to
+unlock files that were decrypted by `openssl`, you can use
+compatibility mode (`-c`).
 
-The example below shows how to use lock_files.py encrypt a file in compatibility mode and then decrypt it using openssl.
+The example below shows how to use lock_files.py encrypt a file in
+compatibility mode and then decrypt it using openssl.
 
 ```bash
 $ lock_files.py -c -P secret -l file.txt
 $ openssl enc -aes-256-cbc -d -a -salt -pass pass:secret -in file.txt.locked -out file.txt
 ```
 
-The example below shows how to use openssl to encrypt a file and then decrypt it using lock_files.py.
+The example below shows how to use openssl to encrypt a file and then
+decrypt it using lock_files.py.
 
 ```bash
 $ openssl enc -aes-256-cbc -e -a -salt -pass pass:secret -in file.txt -out file.txt.locked
 $ lock_files.py -c -P secret -u file.txt.locked
 ```
 
-When `-c` is specified on the command line, all files encrypted or decrypted will be able to be processed by openssl.
+When `-c` is specified on the command line, all files encrypted or
+decrypted will be able to be processed by openssl.
 
 > I want to re-emphasize that if you only want to encrypt/decrypt a single file, use `openssl`, lock_files.py is only
 > meant to be used for groups of files.
 
 ## Download and Test
-Here is how you download and test it. I have multiple versions of python installed so I set the the first argument
-to the test script. If you only have a single version of python, the you do not specify an argument. It assumes the 
-python that is in your path.
+Here is how you download and test it. I have multiple versions of
+python installed so I set the the first argument to the test
+script. If you only have a single version of python, the you do not
+specify an argument. It assumes the python that is in your path.
 
 ```bash
 $ git clone https://github.com/jlinoff/lock_files.git
 $ cd lock_files/test
 
 $ # Use the default version of python.
-$ ./test.sh
+$ ./test.sh 'python ../lock_files.py'
 
 $ # Use a specific version of python 2.
-$ ./test.sh 'python2.7 ./test.sh'
+$ ./test.sh 'python2.7 ../lock_files.py'
 [output snipped]
 
 $ # Use a specific version of python 3.
-$ ./test.sh 'python3.6 ./test.sh'
+$ ./test.sh 'python3.7 ../lock_files.py'
+[output snipped]
+
+$ # Use make to test python2.7 and python3.
+$ make
 [output snipped]
 ```
 
 ## Help
-Here is the on-line help. It describes all of the options and provides examples.
+Here is the on-line help. It describes all of the options and provides
+examples.
 
 ```bash
 $ lock_files.py -h
@@ -470,8 +510,10 @@ PROJECT:
 ```
 
 ## Internals
-The heart of this tool is the class shown below. It allows data to be encrypted/decrypted using the pycrypto package natively or in
-an openssl compatible format. It is based on work that I did years ago that is blogged here: http://joelinoff.com/blog/?p=885.
+The heart of this tool is the class shown below. It allows data to be
+encrypted/decrypted using the pycrypto package natively or in an
+openssl compatible format. It is based on work that I did years ago
+that is blogged here: http://joelinoff.com/blog/?p=885.
 
 ```python
 class AESCipher:
