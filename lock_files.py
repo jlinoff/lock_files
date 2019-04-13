@@ -86,13 +86,12 @@ warning because the file1.txt output file already exists.
 import argparse
 import base64
 import getpass
-import hashlib
 import inspect
+import multiprocessing
 import os
 import subprocess
 import sys
 import threading
-
 from threading import Thread, Lock, Semaphore
 
 try:
@@ -136,7 +135,7 @@ class AESCipher:
         Initialize the object.
 
         @param openssl  Operate identically to openssl.
-        @param width    Width of the MIME encoded lines for encryption.
+        @param width    Width of the MIME encoded lines for encryption. (Not implemented)
         @param digest   The digest used.
         @param keylen   The key length (32-256, 16-128, 8-64).
         @param ivlen    Length of the initialization vector.
@@ -164,7 +163,7 @@ class AESCipher:
 
         @param password  The password.
         @param plaintext The plaintext to encrypt.
-        @param msgdgst   The message digest algorithm.
+        @param msgdgst   The message digest algorithm. (Not implemented)
         '''
         # Setup key and IV for both modes.
         if self.m_openssl:
@@ -303,6 +302,7 @@ class AESCipher:
         later.
 
         @param text  The text to pad.
+        @param size  The size of the block.
         '''
         num_bytes = size - (len(text) % size)
 
@@ -697,16 +697,14 @@ def get_password(opts):
         if not os.path.exists(opts.password_file):
             err("password file doesn't exist: {}".format(opts.password_file))
         password = None
-        ifp = open(opts.password_file, 'rb')
-        for line in ifp.readlines():
-            line.strip()  # leading and trailing white space not allowed
-            if len(line) == 0:
-                continue  # skip blank lines
-            if line[0] == '#':
-                continue  # skip comments
-            password = line
-            break
-        ifp.close()
+        with open(opts.password_file, 'rb') as ifp:
+            for line in ifp.readlines():
+                # leading and trailing white space not allowed
+                line = line.strip()
+                # skip empty and comment lines
+                if line and line[0] != '#':
+                    password = line
+                    break
         if password is None:
             err('password was not found in file ' + opts.password_file)
         return password
@@ -979,9 +977,10 @@ so the program continues.
     if opts.encrypt is True:
         opts.lock = True
     if opts.lock is True and opts.unlock is True:
-        error('You have specified mutually exclusive options to lock/encrypt and unlock/decrypt.')
+        err('You have specified mutually exclusive options to lock/encrypt and unlock/decrypt.')
     if opts.lock is False and opts.unlock is False:
-        opts.lock = True  # the default
+        # the default
+        opts.lock = True
     if opts.inplace:
         opts.suffix = ''
         opts.overwrite = True
